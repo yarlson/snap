@@ -1,0 +1,399 @@
+package workflow
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+
+	"github.com/yarlson/snap/internal/model"
+	"github.com/yarlson/snap/internal/prompts"
+	"github.com/yarlson/snap/internal/queue"
+	"github.com/yarlson/snap/internal/state"
+	"github.com/yarlson/snap/internal/ui"
+)
+
+// workflowStepCount is the number of steps in the iteration workflow.
+// Keep in sync with the steps slice in runIteration.
+const workflowStepCount = 9
+
+// StepCount returns the number of steps in the iteration workflow.
+func StepCount() int {
+	return workflowStepCount
+}
+
+// Config holds workflow configuration.
+type Config struct {
+	TasksDir   string
+	PRDPath    string
+	FreshStart bool // Force fresh start, ignore existing state
+}
+
+// StateManager defines the interface for state management, used in tests for dependency injection.
+type StateManager interface {
+	Load() (*state.State, error)
+	Save(state *state.State) error
+	Reset() error
+	Exists() bool
+}
+
+// Runner orchestrates the task implementation workflow.
+type Runner struct {
+	stepRunner   *StepRunner
+	config       Config
+	stateManager StateManager
+	promptQueue  *queue.Queue
+	stepContext  *StepContext
+	output       io.Writer
+}
+
+// NewRunner creates a new workflow runner. Output defaults to os.Stdout.
+func NewRunner(executor Executor, config Config, opts ...RunnerOption) *Runner {
+	r := &Runner{
+		config:       config,
+		stateManager: state.NewManager(),
+		promptQueue:  queue.New(),
+		stepContext:  NewStepContext(),
+		output:       os.Stdout,
+	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	r.stepRunner = NewStepRunner(executor, r.output)
+	return r
+}
+
+// RunnerOption configures optional Runner behavior.
+type RunnerOption func(*Runner)
+
+// WithOutput sets the writer for all workflow output. When using a SwitchWriter,
+// this routes all output through the switchable buffer for modal input support.
+func WithRunnerOutput(w io.Writer) RunnerOption {
+	return func(r *Runner) {
+		r.output = w
+	}
+}
+
+// WithStateManager overrides the default state manager.
+// Useful for testing with a custom state directory.
+func WithStateManager(m StateManager) RunnerOption {
+	return func(r *Runner) {
+		r.stateManager = m
+	}
+}
+
+// Queue returns the runner's prompt queue for wiring to an input reader.
+func (r *Runner) Queue() *queue.Queue {
+	return r.promptQueue
+}
+
+// StepContext returns the runner's step context for queue UI display.
+func (r *Runner) StepContext() *StepContext {
+	return r.stepContext
+}
+
+// Run executes the task implementation loop until interrupted.
+func (r *Runner) Run(ctx context.Context) error {
+	// Set up signal handling
+	ctx, cancel := context.WithCancel(ctx)
+	// Note: cancel() is called explicitly in signal handler, no defer needed
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		// Write to stderr to bypass potentially-paused SwitchWriter.
+		// If output is paused (user composing input), writing to r.output
+		// would buffer the message and os.Exit would discard it unseen.
+		currentState, err := r.stateManager.Load()
+		if err == nil && currentState != nil {
+			fmt.Fprint(os.Stderr, ui.InterruptedWithContext("Stopped by user", currentState.CurrentStep, currentState.TotalSteps))
+		} else {
+			fmt.Fprint(os.Stderr, ui.Interrupted("Stopped by user"))
+		}
+		cancel()
+		os.Exit(130) // Standard exit code for SIGINT
+	}()
+
+	// Handle fresh start flag
+	if r.config.FreshStart && r.stateManager.Exists() {
+		fmt.Fprint(r.output, ui.Info("Fresh start requested, deleting existing state"))
+		if err := r.stateManager.Reset(); err != nil {
+			return fmt.Errorf("failed to reset state: %w", err)
+		}
+	}
+
+	// Load existing state
+	workflowState, err := r.stateManager.Load()
+	if err != nil {
+		// Corrupt state - warn user and start fresh
+		fmt.Fprint(r.output, ui.Interrupted(fmt.Sprintf("State file corrupt (%v), starting fresh", err)))
+		if err := r.stateManager.Reset(); err != nil {
+			return fmt.Errorf("failed to reset corrupt state: %w", err)
+		}
+		workflowState = nil
+	}
+
+	// Initialize state if needed
+	if workflowState == nil {
+		workflowState = state.NewState(r.config.TasksDir, r.config.PRDPath, workflowStepCount)
+	}
+
+	// Resolve startup target: resume active task or select next.
+	target, err := resolveStartup(workflowState, r.config.TasksDir, workflowStepCount)
+	if err != nil {
+		return fmt.Errorf("cannot resume: %w", err)
+	}
+
+	switch target.action {
+	case actionResume:
+		fmt.Fprint(r.output, ui.Info(fmt.Sprintf("Resuming %s from step %d", target.taskID, target.step)))
+		if workflowState.LastError != "" {
+			fmt.Fprint(r.output, ui.Interrupted(fmt.Sprintf("Last error: %s", workflowState.LastError)))
+		}
+	case actionSelect:
+		done, err := r.selectIdleTask(workflowState)
+		if err != nil {
+			return err
+		}
+		if done {
+			return nil
+		}
+	}
+
+	// Run the workflow loop
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			iterationComplete, err := r.runIteration(ctx, workflowState)
+			if err != nil {
+				// Save error state
+				workflowState.MarkStepFailed(err)
+				if saveErr := r.stateManager.Save(workflowState); saveErr != nil {
+					fmt.Fprint(r.output, ui.Interrupted(fmt.Sprintf("Failed to save error state: %v", saveErr)))
+				}
+				return fmt.Errorf("iteration failed: %w", err)
+			}
+
+			if iterationComplete {
+				// Select next task for the next iteration.
+				// selectIdleTask handles the "all complete" case.
+				done, err := r.selectIdleTask(workflowState)
+				if err != nil {
+					return err
+				}
+				if done {
+					return nil
+				}
+			}
+		}
+	}
+}
+
+// selectIdleTask scans for TASK<n>.md files and selects the next incomplete task.
+// It updates the state with the selected task and saves it. Returns (true, nil) when
+// all tasks are complete (caller should exit cleanly).
+func (r *Runner) selectIdleTask(workflowState *state.State) (bool, error) {
+	tasks, err := ScanTasks(r.config.TasksDir)
+	if err != nil {
+		return false, fmt.Errorf("failed to scan tasks: %w", err)
+	}
+	if len(tasks) == 0 {
+		return false, fmt.Errorf("no task files found in %s", r.config.TasksDir)
+	}
+
+	next := SelectNextTask(tasks, workflowState.CompletedTaskIDs)
+	if next == nil {
+		// All discovered tasks are completed.
+		fmt.Fprint(r.output, ui.Complete("All tasks implemented!"))
+		if err := r.stateManager.Reset(); err != nil {
+			fmt.Fprint(r.output, ui.Interrupted(fmt.Sprintf("Warning: failed to clean up state: %v", err)))
+		}
+		return true, nil
+	}
+
+	workflowState.CurrentTaskID = next.ID
+	workflowState.CurrentTaskFile = next.Filename
+	if err := r.stateManager.Save(workflowState); err != nil {
+		return false, fmt.Errorf("failed to save state after task selection: %w", err)
+	}
+
+	return false, nil
+}
+
+func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (bool, error) {
+	taskLabel := workflowState.CurrentTaskID
+	if taskLabel == "" {
+		taskLabel = "next task"
+	}
+	fmt.Fprint(r.output, ui.Header(fmt.Sprintf("Implementing %s", taskLabel)))
+
+	// Build the Step 1 prompt based on whether a specific task is targeted.
+	implementData := prompts.ImplementData{
+		PRDPath: r.config.PRDPath,
+	}
+	if workflowState.CurrentTaskFile != "" {
+		implementData.TaskPath = filepath.Join(r.config.TasksDir, workflowState.CurrentTaskFile)
+		implementData.TaskID = workflowState.CurrentTaskID
+	}
+	implementPrompt, err := prompts.Implement(implementData)
+	if err != nil {
+		return false, fmt.Errorf("failed to render implement prompt: %w", err)
+	}
+
+	ensureCompletenessPrompt, err := prompts.EnsureCompleteness(prompts.EnsureCompletenessData{
+		TaskPath: implementData.TaskPath,
+		TaskID:   implementData.TaskID,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to render ensure-completeness prompt: %w", err)
+	}
+
+	steps := []struct {
+		name   string
+		prompt string
+		args   []string
+		model  model.Type
+	}{
+		{
+			name:   fmt.Sprintf("Implement %s", taskLabel),
+			prompt: implementPrompt,
+			model:  model.Thinking,
+		},
+		{
+			name:   "Ensure completeness",
+			prompt: ensureCompletenessPrompt,
+			model:  model.Thinking,
+		},
+		{
+			name:   "Lint & test",
+			prompt: prompts.LintAndTest(),
+			args:   []string{"-c"},
+			model:  model.Fast,
+		},
+		{
+			name:   "Code review",
+			prompt: prompts.CodeReview(),
+			model:  model.Thinking,
+		},
+		{
+			name:   "Apply fixes",
+			prompt: prompts.ApplyFixes(),
+			args:   []string{"-c"},
+			model:  model.Fast,
+		},
+		{
+			name:   "Verify fixes",
+			prompt: prompts.LintAndTest(),
+			args:   []string{"-c"},
+			model:  model.Fast,
+		},
+		{
+			name:   "Commit code",
+			prompt: prompts.Commit(),
+			model:  model.Fast,
+		},
+		{
+			name:   "Update memory",
+			prompt: prompts.MemoryUpdate(),
+			args:   []string{"-c"},
+			model:  model.Fast,
+		},
+		{
+			name:   "Commit memory",
+			prompt: prompts.Commit(),
+			args:   []string{"-c"},
+			model:  model.Fast,
+		},
+	}
+
+	// Resume from current step
+	startStep := workflowState.CurrentStep
+	if startStep > 1 {
+		fmt.Fprint(r.output, ui.Info(fmt.Sprintf("Resuming from step %d: %s", startStep, steps[startStep-1].name)))
+	}
+
+	totalSteps := len(steps)
+	if totalSteps != workflowStepCount {
+		return false, fmt.Errorf("internal error: workflowStepCount(%d) != len(steps)(%d); update the constant", workflowStepCount, totalSteps)
+	}
+
+	// Ensure state has correct total steps (handles state from older versions or fresh start)
+	if workflowState.TotalSteps != totalSteps {
+		workflowState.TotalSteps = totalSteps
+		if err := r.stateManager.Save(workflowState); err != nil {
+			return false, fmt.Errorf("failed to update total steps in state: %w", err)
+		}
+	}
+
+	for stepNum := startStep; stepNum <= totalSteps; stepNum++ {
+		step := steps[stepNum-1]
+
+		// Update step context for queue UI display.
+		r.stepContext.Set(stepNum, totalSteps, step.name)
+
+		// Determine if this step should have no-commit suffix
+		var prompt string
+		if step.name == "Commit changes" {
+			prompt = BuildPrompt(step.prompt)
+		} else {
+			prompt = BuildPrompt(step.prompt, WithNoCommit())
+		}
+
+		// Build full args with prompt
+		fullArgs := make([]string, 0, len(step.args)+1)
+		fullArgs = append(fullArgs, step.args...)
+		fullArgs = append(fullArgs, prompt)
+
+		// Execute step with numbering
+		if err := r.stepRunner.RunStepNumbered(ctx, stepNum, totalSteps, step.name, step.model, fullArgs...); err != nil {
+			return false, err
+		}
+
+		// Drain queued user prompts between steps.
+		if errs := DrainQueue(ctx, r.output, r.stepRunner, r.promptQueue); len(errs) > 0 {
+			fmt.Fprintf(os.Stderr, "%d queued prompt(s) failed\n", len(errs))
+		}
+
+		// Mark step complete and save state
+		workflowState.MarkStepComplete()
+		if err := r.stateManager.Save(workflowState); err != nil {
+			return false, fmt.Errorf("failed to save state after step %d: %w", stepNum, err)
+		}
+	}
+
+	// Task complete - mark as completed and reset to idle.
+	fmt.Fprint(r.output, ui.Complete("Iteration complete"))
+
+	if id := workflowState.CurrentTaskID; id != "" {
+		alreadyCompleted := false
+		for _, cid := range workflowState.CompletedTaskIDs {
+			if cid == id {
+				alreadyCompleted = true
+				break
+			}
+		}
+		if !alreadyCompleted {
+			workflowState.CompletedTaskIDs = append(workflowState.CompletedTaskIDs, id)
+		}
+	}
+	workflowState.CurrentTaskID = ""
+	workflowState.CurrentTaskFile = ""
+	workflowState.CurrentStep = 1
+	workflowState.LastError = ""
+	workflowState.SessionID = ""
+	workflowState.LastUpdated = time.Now()
+
+	if err := r.stateManager.Save(workflowState); err != nil {
+		return false, fmt.Errorf("failed to save state after completion: %w", err)
+	}
+
+	return true, nil
+}
