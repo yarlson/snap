@@ -167,20 +167,29 @@ func (p *StreamParser) Parse(r io.Reader) error {
 			}
 		case "user":
 			for _, content := range msg.Message.Content {
-				if content.Type == "tool_result" {
-					// Suppress Read tool results (too noisy)
-					toolName := p.toolUses[content.ToolUseID]
-					if toolName == "Read" {
-						continue
-					}
+				if content.Type != "tool_result" {
+					continue
+				}
 
-					if output := formatToolResult(content); output != "" {
-						if _, err := fmt.Fprint(p.writer, output); err != nil {
-							return err
-						}
-						// Mark that we just output a tool result
-						p.lastWasToolResult = true
+				// Suppress Read tool results (too noisy)
+				toolName := p.toolUses[content.ToolUseID]
+				if toolName == "Read" {
+					continue
+				}
+
+				output := ""
+				if toolName == "TodoWrite" {
+					output = formatTodoToolResult(content, msg.ToolUseResult)
+				}
+				if output == "" {
+					output = formatToolResult(content)
+				}
+				if output != "" {
+					if _, err := fmt.Fprint(p.writer, output); err != nil {
+						return err
 					}
+					// Mark that we just output a tool result
+					p.lastWasToolResult = true
 				}
 			}
 		}
@@ -201,8 +210,9 @@ func (p *StreamParser) Parse(r io.Reader) error {
 
 // StreamMessage represents a message in the stream-json format.
 type StreamMessage struct {
-	Type    string `json:"type"`
-	Message struct {
+	Type          string          `json:"type"`
+	ToolUseResult json.RawMessage `json:"tool_use_result,omitempty"`
+	Message       struct {
 		Content []ContentBlock `json:"content"`
 	} `json:"message"`
 }
@@ -220,6 +230,10 @@ type ContentBlock struct {
 }
 
 func formatToolUse(content ContentBlock) string {
+	if content.Name == "TodoWrite" {
+		return formatTodoToolUse(content)
+	}
+
 	var parts []string
 	parts = append(parts, content.Name)
 
@@ -239,6 +253,135 @@ func formatToolUse(content ContentBlock) string {
 	}
 
 	return ui.Tool(strings.Join(parts, " ")) + "\n"
+}
+
+type TodoItem struct {
+	Content string `json:"content"`
+	Status  string `json:"status"`
+	//nolint:tagliatelle // Claude stream-json uses camelCase field names.
+	ActiveForm string `json:"activeForm,omitempty"`
+}
+
+type TodoToolUseResult struct {
+	//nolint:tagliatelle // Claude stream-json uses camelCase field names.
+	OldTodos []TodoItem `json:"oldTodos"`
+	//nolint:tagliatelle // Claude stream-json uses camelCase field names.
+	NewTodos []TodoItem `json:"newTodos"`
+}
+
+func formatTodoToolUse(content ContentBlock) string {
+	todos := extractTodosFromInput(content.Input)
+	header := "TodoWrite"
+	if len(todos) > 0 {
+		header = fmt.Sprintf("TodoWrite (%d todos)", len(todos))
+	}
+
+	var builder strings.Builder
+	builder.WriteString(ui.Tool(header))
+	builder.WriteByte('\n')
+	builder.WriteString(formatTodoList(todos))
+	return builder.String()
+}
+
+func formatTodoToolResult(content ContentBlock, raw json.RawMessage) string {
+	if content.IsError {
+		return formatToolResult(content)
+	}
+	if len(raw) == 0 {
+		return ""
+	}
+
+	var result TodoToolUseResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return ""
+	}
+	if len(result.NewTodos) == 0 {
+		return ""
+	}
+
+	summary := fmt.Sprintf("TodoWrite updated %d todos", len(result.NewTodos))
+	if len(result.OldTodos) == 0 {
+		summary = fmt.Sprintf("TodoWrite initialized %d todos", len(result.NewTodos))
+	}
+
+	var builder strings.Builder
+	builder.WriteString(ui.Info(summary))
+	builder.WriteString(formatTodoList(result.NewTodos))
+	return builder.String()
+}
+
+func extractTodosFromInput(input map[string]any) []TodoItem {
+	if len(input) == 0 {
+		return nil
+	}
+
+	rawTodos, ok := input["todos"].([]any)
+	if !ok {
+		return nil
+	}
+
+	todos := make([]TodoItem, 0, len(rawTodos))
+	for _, raw := range rawTodos {
+		obj, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		var todo TodoItem
+		if v, ok := obj["content"].(string); ok {
+			todo.Content = v
+		}
+		if v, ok := obj["status"].(string); ok {
+			todo.Status = v
+		}
+		if v, ok := obj["activeForm"].(string); ok {
+			todo.ActiveForm = v
+		}
+		if todo.Content == "" && todo.Status == "" {
+			continue
+		}
+
+		todos = append(todos, todo)
+	}
+
+	return todos
+}
+
+func formatTodoList(todos []TodoItem) string {
+	if len(todos) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for _, todo := range todos {
+		status := todo.Status
+		if status == "" {
+			status = "unknown"
+		}
+		status = ui.StripColors(status)
+		content := todo.Content
+		if content == "" {
+			content = "(no content)"
+		}
+		content = ui.StripColors(content)
+
+		fmt.Fprintf(&builder, "   %s [%s] %s\n", todoStatusMarker(status), status, content)
+	}
+
+	return builder.String()
+}
+
+func todoStatusMarker(status string) string {
+	switch status {
+	case "completed":
+		return "[x]"
+	case "in_progress":
+		return "[~]"
+	case "pending":
+		return "[ ]"
+	default:
+		return "[-]"
+	}
 }
 
 func formatToolResult(content ContentBlock) string {
