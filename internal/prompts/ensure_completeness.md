@@ -10,7 +10,7 @@ Verify {{.TaskID}} is fully implemented by checking every acceptance criterion i
 ## Process
 
 1. For each acceptance criterion in the task, verify it is implemented and tested
-2. If anything is missing, implement it now using TDD (failing test first, then minimal code)
+2. If anything is missing, implement it — write a failing test at the appropriate layer (E2E, integration, or unit per the task's test plan), then minimal code to pass
 
 ## Scope
 

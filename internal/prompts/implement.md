@@ -22,12 +22,15 @@
 ## Process
 
 1. Read the task's acceptance criteria — these define "done"
-2. For each piece of functionality:
-   - Write a failing test first
+2. Read the task's **Test plan** section — it specifies which test types to write (E2E, integration, unit)
+3. If TECHNOLOGY.md defines a testing strategy, follow it
+4. Work outside-in:
+   - Start from the user surface — write a failing E2E or integration test for the happy path first
    - Implement minimal code to pass
+   - Add unit tests only for logic with combinatorial edge cases (parsers, validators, state machines)
    - Refactor if needed
-3. Every public function and every error path must have a test
-4. Verify all acceptance criteria are met before finishing
+5. Prefer real dependencies in tests — mock only at boundaries you don't control (external APIs, third-party services)
+6. Verify all acceptance criteria are met before finishing
 
 ## Quality Guardrails
 
