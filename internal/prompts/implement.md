@@ -4,11 +4,12 @@
 2. Read .memory/memory-map.md, then summary.md, terminology.md, practices.md, and relevant domain files
 3. Read {{.PRDPath}} for product context
 4. If TECHNOLOGY.md exists, read it for architecture and tech stack
-5. If TASKS.md exists, read it for task structure
+5. If DESIGN.md exists, read it for voice, terminology, content patterns, and UI conventions
+6. If TASKS.md exists, read it for task structure
    {{- if .TaskPath}}
-6. Read {{.TaskPath}} — this is the task to implement
+7. Read {{.TaskPath}} — this is the task to implement
    {{- end}}
-7. Study existing source code for established patterns, naming, and structure
+8. Study existing source code for established patterns, naming, and structure
 
 {{if .TaskID}}Implement {{.TaskID}} in this run.{{else}}Pick the next unimplemented task and implement only that one.{{end}}
 

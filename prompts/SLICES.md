@@ -14,8 +14,9 @@ Split the product and engineering plan into vertical slices. Each slice is one a
 2. Read .memory/ vault files if present (memory-map.md, summary.md, terminology.md)
 3. Read `docs/plans/PRD.md` — extract user-visible outcomes, non-negotiables, constraints, and acceptance criteria
 4. Read `docs/plans/TECHNOLOGY.md` — extract architecture boundaries, tooling constraints, quality bars, and release requirements
+5. If `docs/plans/DESIGN.md` exists, read it — extract voice/tone, terminology, content patterns, and UI conventions
 
-If either file is missing or empty, state what is missing, provide the best possible plan from what exists, and include a "Missing info needed" section (max 10 bullets).
+If PRD or TECHNOLOGY is missing or empty, state what is missing, provide the best possible plan from what exists, and include a "Missing info needed" section (max 10 bullets).
 
 ## Scope
 
