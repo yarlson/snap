@@ -77,7 +77,8 @@ Deviate from this order only if the docs force it — explain why explicitly, pr
 
 Follow the test/quality strategy from `docs/plans/TECHNOLOGY.md`. If vague, enforce:
 
-- TDD for core logic and validators
+- Outside-in TDD — start from the user surface (E2E or integration), drive inward to units only for combinatorial logic
+- E2E tests map 1:1 to CUJs from TASKS.md section D — no other E2E tests
 - Structure/constraint-based tests for nondeterministic outputs
 - Lint/format gates in every task
 - Each task specifies what quality gates must pass

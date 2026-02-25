@@ -158,6 +158,9 @@ Check every changed line against these categories:
 - Bug fixes have regression tests?
 - Security-critical paths tested?
 - Edge cases covered (empty input, max values, errors)?
+- E2E tests limited to happy paths and mapped to CUJs (if defined in TASKS.md)?
+- Integration tests use real dependencies, not mocks of internal interfaces?
+- Flag unit tests that only verify delegation between components — those belong in integration tests
 
 If tests are missing for critical paths, list what should be tested.
 

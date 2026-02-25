@@ -23,14 +23,17 @@
 
 1. Read the task's acceptance criteria — these define "done"
 2. Read the task's **Test plan** section — it specifies which test types to write (E2E, integration, unit)
-3. If TECHNOLOGY.md defines a testing strategy, follow it
-4. Work outside-in:
+3. If TASKS.md has a **Critical User Journeys** section, E2E tests must map to those CUJs by name
+4. If TECHNOLOGY.md defines a testing strategy, follow it
+5. Run the existing test suite before writing new code — if anything fails, stop and fix it first
+6. Work outside-in:
    - Start from the user surface — write a failing E2E or integration test for the happy path first
    - Implement minimal code to pass
    - Add unit tests only for logic with combinatorial edge cases (parsers, validators, state machines)
    - Refactor if needed
-5. Prefer real dependencies in tests — mock only at boundaries you don't control (external APIs, third-party services)
-6. Verify all acceptance criteria are met before finishing
+7. Prefer real dependencies in tests — mock only at boundaries you don't control (external APIs, third-party services)
+8. Run the full test suite after implementation — all existing and new tests must pass
+9. Verify all acceptance criteria are met before finishing
 
 ## Quality Guardrails
 
