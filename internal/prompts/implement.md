@@ -32,8 +32,9 @@
    - Add unit tests only for logic with combinatorial edge cases (parsers, validators, state machines)
    - Refactor if needed
 7. Prefer real dependencies in tests — mock only at boundaries you don't control (external APIs, third-party services)
-8. Run the full test suite after implementation — all existing and new tests must pass
-9. Verify all acceptance criteria are met before finishing
+8. Run the full test suite after implementation — all existing and new tests must pass, including E2E tests from prior tasks
+9. If the task changes user-facing behavior, update the relevant docs (README, CLI help text, usage examples, API docs)
+10. Verify all acceptance criteria are met before finishing
 
 ## Quality Guardrails
 
@@ -62,6 +63,12 @@
 - Don't add extension points, hooks, or configuration for hypothetical future needs
 - Don't wrap standard library or framework APIs — use them directly
 - Three similar lines are better than a premature abstraction
+
+**Dependencies:**
+
+- Prefer the standard library over external packages — add a dependency only when it saves significant complexity
+- Before adding a package, check: actively maintained, permissive license (MIT/Apache/BSD), no known vulnerabilities
+- One dependency per problem — don't add two packages that solve the same thing
 
 **Architecture:**
 
