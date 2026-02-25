@@ -352,20 +352,19 @@ func formatTodoList(todos []TodoItem) string {
 		return ""
 	}
 
+	resetCode := ui.ResolveStyle(ui.WeightNormal)
+
 	var builder strings.Builder
 	for _, todo := range todos {
-		status := todo.Status
-		if status == "" {
-			status = "unknown"
-		}
-		status = ui.StripColors(status)
+		status := ui.StripColors(todo.Status)
 		content := todo.Content
 		if content == "" {
 			content = "(no content)"
 		}
 		content = ui.StripColors(content)
 
-		fmt.Fprintf(&builder, "   %s [%s] %s\n", todoStatusMarker(status), status, content)
+		colorCode := todoStatusColor(status)
+		fmt.Fprintf(&builder, "   %s%s %s%s\n", colorCode, todoStatusMarker(status), content, resetCode)
 	}
 
 	return builder.String()
@@ -381,6 +380,19 @@ func todoStatusMarker(status string) string {
 		return "[ ]"
 	default:
 		return "[-]"
+	}
+}
+
+func todoStatusColor(status string) string {
+	switch status {
+	case "completed":
+		return ui.ResolveColor(ui.ColorSuccess)
+	case "in_progress":
+		return ui.ResolveColor(ui.ColorWarning)
+	case "pending":
+		return ui.ResolveStyle(ui.WeightDim)
+	default:
+		return ui.ResolveStyle(ui.WeightDim)
 	}
 }
 

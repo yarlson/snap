@@ -95,10 +95,8 @@ func TestStreamParser(t *testing.T) {
 			input: `{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_todo_1","name":"TodoWrite","input":{"todos":[{"content":"Inspect parser tokenization logic","status":"pending","activeForm":"Inspecting parser tokenization logic"},{"content":"Review parser error handling paths","status":"in_progress","activeForm":"Reviewing parser error handling paths"}]}}]}}`,
 			expectedContent: []string{
 				"🔧 TodoWrite",
-				"Inspect parser tokenization logic",
-				"pending",
-				"Review parser error handling paths",
-				"in_progress",
+				"[ ] Inspect parser tokenization logic",
+				"[~] Review parser error handling paths",
 			},
 		},
 		{
@@ -107,10 +105,8 @@ func TestStreamParser(t *testing.T) {
 {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_todo_2","content":"Todos have been modified successfully"}]},"tool_use_result":{"oldTodos":[{"content":"Inspect parser tokenization logic","status":"pending","activeForm":"Inspecting parser tokenization logic"}],"newTodos":[{"content":"Inspect parser tokenization logic","status":"completed","activeForm":"Inspecting parser tokenization logic"},{"content":"Review parser error handling paths","status":"in_progress","activeForm":"Reviewing parser error handling paths"}]}}`,
 			expectedContent: []string{
 				"TodoWrite",
-				"Inspect parser tokenization logic",
-				"completed",
-				"Review parser error handling paths",
-				"in_progress",
+				"[x] Inspect parser tokenization logic",
+				"[~] Review parser error handling paths",
 			},
 		},
 		{
