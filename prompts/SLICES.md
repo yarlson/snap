@@ -54,6 +54,10 @@ When in doubt, prefer slightly larger tasks over fragmenting into pieces that ar
 - No real business logic (stubs/mocks allowed)
 - Quality gates (tests/lint/format) runnable and passing
 
+**After Task 0 — extract Critical User Journeys (CUJs):**
+
+Extract CUJs from the PRD's core flow, use cases, and user scenarios. A CUJ is a named end-to-end path through the product that a real user would perform (e.g., "User signs up and creates first project"). Each CUJ becomes exactly one E2E test — no more, no less. Cap at 8 CUJs — if you have more, merge related flows or drop the least critical.
+
 **After Task 0 — breadth-first delivery:**
 
 1. Identify Epics (major user-facing capabilities) from `docs/plans/PRD.md`
@@ -89,12 +93,13 @@ All files go in `docs/plans/tasks/`.
 | A. Document Intake Summary          | Key extractions from PRD.md and TECHNOLOGY.md                                                                |
 | B. Assumptions                      | Bullets for incomplete/ambiguous areas                                                                       |
 | C. Vertical Slice Design Principles | 5–10 bullets defining a valid slice for this project                                                         |
-| D. Epic List                        | Epic 1..N with Thin E2E and Enhancement Wave definitions                                                     |
-| E. Capability Map                   | PRD capabilities → technical modules (table or bullets)                                                      |
-| F. Task List                        | Numbered list: file name, name, Epic/increment type, user-visible outcome, risk justification, scope (S/M/L) |
-| G. Dependency Graph & Critical Path | Explicit dependencies + ordered critical path                                                                |
-| H. Risk Register                    | Risk → impact → mitigation → which task addresses it                                                         |
-| I. Coverage Checklist               | Each PRD capability → which task delivers it                                                                 |
+| D. Critical User Journeys           | Named end-to-end flows extracted from PRD — each maps to one E2E test                                        |
+| E. Epic List                        | Epic 1..N with Thin E2E and Enhancement Wave definitions                                                     |
+| F. Capability Map                   | PRD capabilities → technical modules (table or bullets)                                                      |
+| G. Task List                        | Numbered list: file name, name, Epic/increment type, user-visible outcome, risk justification, scope (S/M/L) |
+| H. Dependency Graph & Critical Path | Explicit dependencies + ordered critical path                                                                |
+| I. Risk Register                    | Risk → impact → mitigation → which task addresses it                                                         |
+| J. Coverage Checklist               | Each PRD capability → which task delivers it                                                                 |
 
 Risk register must include at minimum: validation regressions, integration failures, secrets/key leakage (if applicable), data loss, flaky tests, performance constraints (if applicable).
 
@@ -111,7 +116,7 @@ Each file must contain exactly:
 6. **Persistence deliverables** (if any)
 7. **Integration deliverables** (if any)
 8. **Validation/safety/compliance deliverables**
-9. **Test plan** — unit tests, integration tests, UI smoke tests, contract/golden tests (categories + example assertions, no code)
+9. **Test plan** — E2E tests (reference CUJs by name from TASKS.md section D), integration tests, unit tests (categories + example assertions, no code)
 10. **Tooling/Build/CI gates impacted** — what must pass (describe, no commands)
 11. **Acceptance criteria** (checklist)
 12. **Demo script** (step-by-step, non-technical user)
