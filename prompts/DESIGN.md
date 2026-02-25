@@ -12,20 +12,20 @@ Translate the product requirements into a design and content specification.
 
 1. Read CLAUDE.md or AGENTS.md if present — follow all project conventions
 2. Read .memory/ vault files if present (memory-map.md, summary.md, terminology.md)
-3. Read `docs/plans/PRD.md` — extract target users, use cases, and UX/behavior requirements
-4. If `docs/plans/TECHNOLOGY.md` exists, read it for platform constraints and surface types
+3. Read `docs/tasks/PRD.md` — extract target users, use cases, and UX/behavior requirements
+4. If `docs/tasks/TECHNOLOGY.md` exists, read it for platform constraints and surface types
 5. Scan the codebase for existing user-facing patterns (messages, output formatting, UI components)
 
 ## Scope
 
-- Produce a single `docs/plans/DESIGN.md` that defines the product's design language and content standards
+- Produce a single `docs/tasks/DESIGN.md` that defines the product's design language and content standards
 - Include sections **only if relevant** to the product surface (e.g., skip visual system for a headless API)
 - List assumptions explicitly
 - Do NOT write code
 
 ## Output
 
-One file `docs/plans/DESIGN.md` with:
+One file `docs/tasks/DESIGN.md` with:
 
 **Required sections (all products):**
 
@@ -50,4 +50,4 @@ One file `docs/plans/DESIGN.md` with:
 
 ## Completion
 
-Done when `docs/plans/DESIGN.md` is written, covers all required sections plus relevant conditional sections, and every content pattern includes at least one concrete example.
+Done when `docs/tasks/DESIGN.md` is written, covers all required sections plus relevant conditional sections, and every content pattern includes at least one concrete example.

@@ -12,15 +12,15 @@ Split the product and engineering plan into vertical slices. Each slice is one a
 
 1. Read CLAUDE.md or AGENTS.md if present — follow all project conventions
 2. Read .memory/ vault files if present (memory-map.md, summary.md, terminology.md)
-3. Read `docs/plans/PRD.md` — extract user-visible outcomes, non-negotiables, constraints, and acceptance criteria
-4. Read `docs/plans/TECHNOLOGY.md` — extract architecture boundaries, tooling constraints, quality bars, and release requirements
-5. If `docs/plans/DESIGN.md` exists, read it — extract voice/tone, terminology, content patterns, and UI conventions
+3. Read `docs/tasks/PRD.md` — extract user-visible outcomes, non-negotiables, constraints, and acceptance criteria
+4. Read `docs/tasks/TECHNOLOGY.md` — extract architecture boundaries, tooling constraints, quality bars, and release requirements
+5. If `docs/tasks/DESIGN.md` exists, read it — extract voice/tone, terminology, content patterns, and UI conventions
 
 If PRD or TECHNOLOGY is missing or empty, state what is missing, provide the best possible plan from what exists, and include a "Missing info needed" section (max 10 bullets).
 
 ## Scope
 
-- Produce `docs/plans/tasks/TASKS.md` (overview) and one `docs/plans/tasks/TASK<N>.md` per task
+- Produce `docs/tasks/TASKS.md` (overview) and one `docs/tasks/TASK<N>.md` per task
 - Do NOT write code
 - Do NOT create infrastructure-only tasks that aren't demoable
 - Do NOT defer all validation/testing to later tasks
@@ -30,7 +30,7 @@ If PRD or TECHNOLOGY is missing or empty, state what is missing, provide the bes
 - **Vertical slice** — end-to-end increment producing a demoable, usable deliverable, crossing all applicable layers (UI → domain → validation → persistence → integration)
 - **Thin E2E Increment (Happy Path)** — smallest end-to-end implementation that makes an Epic real and demoable
 - **Enhancement Wave** — next increment of the same Epic (robustness, safety, persistence, UX polish, performance, error handling)
-- **Epic** — major user-facing capability derived from `docs/plans/PRD.md`
+- **Epic** — major user-facing capability derived from `docs/tasks/PRD.md`
 
 ## Task sizing
 
@@ -49,7 +49,7 @@ When in doubt, prefer slightly larger tasks over fragmenting into pieces that ar
 
 **Task 0 — Walking Skeleton:**
 
-- Built, launched, and exercised end-to-end using the primary workflow from `docs/plans/TECHNOLOGY.md`
+- Built, launched, and exercised end-to-end using the primary workflow from `docs/tasks/TECHNOLOGY.md`
 - Deployable/distributable/runnable as defined by the docs
 - Includes app shell/navigation, placeholder screens, minimal happy-path flow
 - No real business logic (stubs/mocks allowed)
@@ -61,7 +61,7 @@ Extract CUJs from the PRD's core flow, use cases, and user scenarios. A CUJ is a
 
 **After Task 0 — breadth-first delivery:**
 
-1. Identify Epics (major user-facing capabilities) from `docs/plans/PRD.md`
+1. Identify Epics (major user-facing capabilities) from `docs/tasks/PRD.md`
 2. Deliver one Thin E2E Increment per Epic, breadth-first (Epic 1 → Epic 2 → … → Epic N)
 3. Then deliver Enhancement Waves breadth-first (Epic 1 Wave 1 → Epic 2 Wave 1 → … → Epic N Wave 1)
 4. Repeat for Wave 2, Wave 3, etc., until PRD scope is complete
@@ -76,7 +76,7 @@ Deviate from this order only if the docs force it — explain why explicitly, pr
 
 ### Testing & quality
 
-Follow the test/quality strategy from `docs/plans/TECHNOLOGY.md`. If vague, enforce:
+Follow the test/quality strategy from `docs/tasks/TECHNOLOGY.md`. If vague, enforce:
 
 - Outside-in TDD — start from the user surface (E2E or integration), drive inward to units only for combinatorial logic
 - E2E tests map 1:1 to CUJs from TASKS.md section D — no other E2E tests
@@ -86,7 +86,7 @@ Follow the test/quality strategy from `docs/plans/TECHNOLOGY.md`. If vague, enfo
 
 ## Output
 
-All files go in `docs/plans/tasks/`.
+All files go in `docs/tasks/`.
 
 ### File: `TASKS.md`
 
@@ -134,4 +134,4 @@ Each file must contain exactly:
 
 ## Completion
 
-Done when `docs/plans/tasks/TASKS.md` and all `docs/plans/tasks/TASK<N>.md` files are written, every PRD capability is mapped to a task, and the sequencing rules are followed.
+Done when `docs/tasks/TASKS.md` and all `docs/tasks/TASK<N>.md` files are written, every PRD capability is mapped to a task, and the sequencing rules are followed.

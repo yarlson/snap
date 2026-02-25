@@ -18,14 +18,14 @@ Write an implementation-ready **PRD** for the product described by the repositor
 
 ## Scope
 
-- Analyze the repo and produce a single `docs/plans/PRD.md` file
+- Analyze the repo and produce a single `docs/tasks/PRD.md` file
 - Make assumptions where info is missing — list them explicitly
 - Do NOT write code or reference specific tech/framework names
 - Do NOT include implementation details (architecture, modules, internal APIs)
 
 ## Output
 
-One file `docs/plans/PRD.md` with:
+One file `docs/tasks/PRD.md` with:
 
 - Summary, Problem, Goals, Non-goals
 - Users & Use cases, Core flow
@@ -42,4 +42,4 @@ One file `docs/plans/PRD.md` with:
 
 ## Completion
 
-Done when `docs/plans/PRD.md` is written, covers all output sections, and lists all assumptions made.
+Done when `docs/tasks/PRD.md` is written, covers all output sections, and lists all assumptions made.

@@ -14,19 +14,19 @@ Map the product requirements into an engineering plan.
 
 1. Read CLAUDE.md or AGENTS.md if present — follow all project conventions
 2. Read .memory/ vault files if present (memory-map.md, summary.md, terminology.md)
-3. Read `docs/plans/PRD.md` — this is the primary input
+3. Read `docs/tasks/PRD.md` — this is the primary input
 4. Scan the codebase for existing architecture and patterns
 
 ## Scope
 
-- Produce a single `docs/plans/TECHNOLOGY.md` that maps PRD requirements to engineering decisions
+- Produce a single `docs/tasks/TECHNOLOGY.md` that maps PRD requirements to engineering decisions
 - Include sections **only if relevant** to the PRD (e.g., auth/keys, persistence, safety, offline, integrations)
 - List assumptions explicitly
 - Do NOT write code
 
 ## Output
 
-One file `docs/plans/TECHNOLOGY.md` with:
+One file `docs/tasks/TECHNOLOGY.md` with:
 
 - Engineering north star (non-negotiables)
 - Architecture/modules (boundaries + responsibilities)
@@ -78,4 +78,4 @@ The testing strategy in the output must adhere to these principles.
 
 ## Completion
 
-Done when `docs/plans/TECHNOLOGY.md` is written, covers all relevant output sections, and every PRD requirement maps to at least one architectural decision.
+Done when `docs/tasks/TECHNOLOGY.md` is written, covers all relevant output sections, and every PRD requirement maps to at least one architectural decision.
