@@ -52,6 +52,14 @@
 - No N+1 patterns — batch or join
 - Avoid O(n²) in hot paths
 
+**Simplicity:**
+
+- Don't create abstractions, interfaces, or wrapper types with only one implementation
+- Don't extract helpers or utilities for code used in one place — inline it
+- Don't add extension points, hooks, or configuration for hypothetical future needs
+- Don't wrap standard library or framework APIs — use them directly
+- Three similar lines are better than a premature abstraction
+
 **Architecture:**
 
 - Keep business logic separate from I/O
