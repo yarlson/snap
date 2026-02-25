@@ -1,8 +1,9 @@
-Update `.memory/` so it accurately reflects the current codebase state after the latest changes. The vault is **current-state documentation**, not a history log.
+Update `.memory/` in the **project root** so it accurately reflects the current codebase state after the latest changes. The vault is **current-state documentation**, not a history log.
 
 ## Scope
 
-- Only update files inside `.memory/` — do not modify any source code
+- All reads and writes target `.memory/` inside the project root — never outside the project directory
+- Do not modify any source code
 - Only document current state — not change history
 
 ## Identify What Changed
