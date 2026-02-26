@@ -22,6 +22,9 @@ var codeReview string
 //go:embed apply_fixes.md
 var applyFixes string
 
+//go:embed update_docs.md
+var updateDocs string
+
 //go:embed commit.md
 var commit string
 
@@ -75,6 +78,9 @@ func CodeReview() string { return strings.TrimSpace(codeReview) }
 
 // ApplyFixes returns the apply-fixes prompt.
 func ApplyFixes() string { return strings.TrimSpace(applyFixes) }
+
+// UpdateDocs returns the update-docs prompt.
+func UpdateDocs() string { return strings.TrimSpace(updateDocs) }
 
 // Commit returns the commit prompt.
 func Commit() string { return strings.TrimSpace(commit) }

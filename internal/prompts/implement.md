@@ -34,8 +34,7 @@
    - Refactor if needed
 7. Prefer real dependencies in tests — mock only at boundaries you don't control (external APIs, third-party services)
 8. Run the full test suite after implementation — all existing and new tests must pass, including E2E tests from prior tasks
-9. If the task changes user-facing behavior, update the relevant docs (README, CLI help text, usage examples, API docs)
-10. Verify all acceptance criteria are met before finishing
+9. Verify all acceptance criteria are met before finishing
 
 ## Quality Guardrails
 

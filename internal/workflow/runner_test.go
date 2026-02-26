@@ -79,7 +79,7 @@ func TestRunner_StateManagement(t *testing.T) {
 	t.Run("state reset with fresh flag", func(t *testing.T) {
 		// Ensure state exists
 		stateManager := state.NewManagerWithDir(tmpDir)
-		workflowState := state.NewState(tmpDir, prdPath, 9)
+		workflowState := state.NewState(tmpDir, prdPath, workflow.StepCount())
 		workflowState.CurrentStep = 5
 		err := stateManager.Save(workflowState)
 		assert.NoError(t, err)
@@ -250,7 +250,7 @@ func TestRunner_IdleTaskSelection(t *testing.T) {
 		stateManager := state.NewManagerWithDir(tmpDir)
 		//nolint:errcheck // cleanup
 		_ = stateManager.Reset()
-		seedState := state.NewState(tmpDir, prdPath, 9)
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
 		seedState.CompletedTaskIDs = []string{"TASK1"}
 		assert.NoError(t, stateManager.Save(seedState))
 
@@ -315,7 +315,7 @@ func TestRunner_IdleTaskSelection(t *testing.T) {
 		stateManager := state.NewManagerWithDir(tmpDir)
 		//nolint:errcheck // cleanup
 		_ = stateManager.Reset()
-		seedState := state.NewState(tmpDir, prdPath, 9)
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
 		seedState.CompletedTaskIDs = []string{"TASK1"}
 		assert.NoError(t, stateManager.Save(seedState))
 
@@ -353,7 +353,7 @@ func TestRunner_IdleTaskSelection(t *testing.T) {
 			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
 				stepCount++
 				// Let first iteration's steps succeed, then fail on second iteration.
-				if stepCount > 9 {
+				if stepCount > 10 {
 					return errors.New("stop after first iteration")
 				}
 				return nil
@@ -389,7 +389,7 @@ func TestRunner_ResumeExactTaskAndStep(t *testing.T) {
 
 		// Pre-seed state: TASK2 active at step 5.
 		stateManager := state.NewManagerWithDir(tmpDir)
-		seedState := state.NewState(tmpDir, prdPath, 9)
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
 		seedState.CurrentTaskID = "TASK2"
 		seedState.CurrentTaskFile = "TASK2.md"
 		seedState.CurrentStep = 5
@@ -436,7 +436,7 @@ func TestRunner_ResumeExactTaskAndStep(t *testing.T) {
 
 		// Pre-seed state: TASK1 active at step 3, no tasks completed.
 		stateManager := state.NewManagerWithDir(tmpDir)
-		seedState := state.NewState(tmpDir, prdPath, 9)
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
 		seedState.CurrentTaskID = "TASK1"
 		seedState.CurrentTaskFile = "TASK1.md"
 		seedState.CurrentStep = 3
@@ -478,7 +478,7 @@ func TestRunner_ResumeExactTaskAndStep(t *testing.T) {
 
 		// Pre-seed state: TASK1 active at step 4.
 		stateManager := state.NewManagerWithDir(tmpDir)
-		seedState := state.NewState(tmpDir, prdPath, 9)
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
 		seedState.CurrentTaskID = "TASK1"
 		seedState.CurrentTaskFile = "TASK1.md"
 		seedState.CurrentStep = 4
@@ -516,7 +516,7 @@ func TestRunner_ResumeFailsOnInvalidState(t *testing.T) {
 
 		// Pre-seed state: TASK1 active (but file doesn't exist).
 		stateManager := state.NewManagerWithDir(tmpDir)
-		seedState := state.NewState(tmpDir, prdPath, 9)
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
 		seedState.CurrentTaskID = "TASK1"
 		seedState.CurrentTaskFile = "TASK1.md"
 		seedState.CurrentStep = 3
@@ -582,7 +582,7 @@ func TestRunner_IterationCompleteIncludesDuration(t *testing.T) {
 }
 
 func TestRunner_StepCount(t *testing.T) {
-	assert.Equal(t, 9, workflow.StepCount())
+	assert.Equal(t, 10, workflow.StepCount())
 }
 
 func TestRunner_EmbeddedPrompts(t *testing.T) {
@@ -613,7 +613,7 @@ func TestRunner_EmbeddedPrompts(t *testing.T) {
 
 	err := runner.Run(context.Background())
 	assert.NoError(t, err)
-	require.Len(t, capturedPrompts, 9, "workflow should execute exactly 9 steps")
+	require.Len(t, capturedPrompts, 10, "workflow should execute exactly 10 steps")
 
 	// Step 1: Implement — contains PRD path, task reference, and quality guardrails
 	assert.Contains(t, capturedPrompts[0], prdPath)
@@ -642,17 +642,22 @@ func TestRunner_EmbeddedPrompts(t *testing.T) {
 	// Step 6: Verify fixes (same as step 3)
 	assert.Contains(t, capturedPrompts[5], "AGENTS.md")
 
-	// Step 7: Commit code
-	assert.Contains(t, capturedPrompts[6], "conventional commit")
-	assert.Contains(t, capturedPrompts[6], "co-author")
+	// Step 7: Update docs — diff-based documentation update
+	assert.Contains(t, capturedPrompts[6], "merge-base")
+	assert.Contains(t, capturedPrompts[6], "README.md")
+	assert.Contains(t, capturedPrompts[6], "user-facing")
 
-	// Step 8: Memory update — full embedded skill, not delegation
-	assert.Contains(t, capturedPrompts[7], ".memory/")
-	assert.Contains(t, capturedPrompts[7], "summary.md")
-	assert.NotContains(t, capturedPrompts[7], "Update the memory vault.")
+	// Step 8: Commit code
+	assert.Contains(t, capturedPrompts[7], "conventional commit")
+	assert.Contains(t, capturedPrompts[7], "co-author")
 
-	// Step 9: Commit memory (same as step 7)
-	assert.Contains(t, capturedPrompts[8], "conventional commit")
+	// Step 9: Memory update — full embedded skill, not delegation
+	assert.Contains(t, capturedPrompts[8], ".memory/")
+	assert.Contains(t, capturedPrompts[8], "summary.md")
+	assert.NotContains(t, capturedPrompts[8], "Update the memory vault.")
+
+	// Step 10: Commit memory (same as step 8)
+	assert.Contains(t, capturedPrompts[9], "conventional commit")
 }
 
 func TestRunner_CompletionDeduplication(t *testing.T) {
@@ -667,7 +672,7 @@ func TestRunner_CompletionDeduplication(t *testing.T) {
 		// Pre-seed state: TASK1 already completed, TASK2 active at last step.
 		// After TASK2 completes, CompletedTaskIDs should have exactly [TASK1, TASK2].
 		stateManager := state.NewManagerWithDir(tmpDir)
-		seedState := state.NewState(tmpDir, prdPath, 9)
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
 		seedState.CurrentTaskID = "TASK2"
 		seedState.CurrentTaskFile = "TASK2.md"
 		seedState.CurrentStep = 9 // Last step
@@ -708,7 +713,7 @@ func TestRunner_CompletionDeduplication(t *testing.T) {
 		// already in the completed list (bypassing normal validation for test purposes).
 		// The completion logic should NOT duplicate it.
 		stateManager := state.NewManagerWithDir(tmpDir)
-		seedState := state.NewState(tmpDir, prdPath, 9)
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
 		seedState.CurrentTaskID = "TASK1"
 		seedState.CurrentTaskFile = "TASK1.md"
 		seedState.CurrentStep = 9
@@ -749,6 +754,47 @@ func TestRunner_CompletionDeduplication(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestRunner_UpdateDocsStepConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	prdPath := filepath.Join(tmpDir, "PRD.md")
+	require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+	stateManager := state.NewManagerWithDir(tmpDir)
+	//nolint:errcheck // cleanup
+	_ = stateManager.Reset()
+
+	type stepCapture struct {
+		model  model.Type
+		prompt string
+	}
+	var captured []stepCapture
+	mockExec := &MockExecutor{
+		runFunc: func(_ context.Context, _ io.Writer, mt model.Type, args ...string) error {
+			prompt := ""
+			if len(args) > 0 {
+				prompt = args[len(args)-1]
+			}
+			captured = append(captured, stepCapture{model: mt, prompt: prompt})
+			return nil
+		},
+	}
+
+	runner := workflow.NewRunner(mockExec, workflow.Config{
+		TasksDir: tmpDir,
+		PRDPath:  prdPath,
+	}, workflow.WithStateManager(stateManager))
+
+	err := runner.Run(context.Background())
+	assert.NoError(t, err)
+	require.Len(t, captured, 10)
+
+	// Step 7 (index 6): "Update docs" must use Fast model and include no-commit suffix.
+	assert.Equal(t, model.Fast, captured[6].model, "Update docs step should use Fast model")
+	assert.Contains(t, captured[6].prompt, "Do not stage, commit, amend, rebase, or push", "Update docs step should include no-commit suffix")
 }
 
 func TestRunner_SnapshotErrorsAreNonFatal(t *testing.T) {
@@ -855,8 +901,8 @@ func TestRunner_SnapshotsCreatedDuringIteration(t *testing.T) {
 	assert.NotEmpty(t, stashEntries, "stash list should contain snapshot entries")
 
 	lines := strings.Split(stashEntries, "\n")
-	// Should have 7 snapshots (steps 1-6 and 8; skip steps 7 and 9 which are commit steps with clean trees).
-	assert.Equal(t, 7, len(lines), "expected snapshots for all non-commit steps")
+	// Should have 8 snapshots (steps 1-7 and 9; skip steps 8 and 10 which are commit steps with clean trees).
+	assert.Equal(t, 8, len(lines), "expected snapshots for all non-commit steps")
 
 	// All entries should have snap: prefix.
 	for _, line := range lines {

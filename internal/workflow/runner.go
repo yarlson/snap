@@ -21,7 +21,7 @@ import (
 
 // workflowStepCount is the number of steps in the iteration workflow.
 // Keep in sync with the steps slice in runIteration.
-const workflowStepCount = 9
+const workflowStepCount = 10
 
 // StepCount returns the number of steps in the iteration workflow.
 func StepCount() int {
@@ -311,6 +311,12 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 			model:  model.Fast,
 		},
 		{
+			name:   "Update docs",
+			prompt: prompts.UpdateDocs(),
+			args:   []string{"-c"},
+			model:  model.Fast,
+		},
+		{
 			name:   "Commit code",
 			prompt: prompts.Commit(),
 			model:  model.Fast,
@@ -356,7 +362,7 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 
 		// Determine if this step should have no-commit suffix
 		var prompt string
-		if step.name == "Commit changes" {
+		if strings.Contains(step.name, "Commit") {
 			prompt = BuildPrompt(step.prompt)
 		} else {
 			prompt = BuildPrompt(step.prompt, WithNoCommit())

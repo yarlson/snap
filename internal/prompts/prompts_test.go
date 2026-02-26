@@ -76,6 +76,16 @@ func TestImplement_ScopeRules(t *testing.T) {
 	assert.Contains(t, result, "acceptance criteria")
 }
 
+func TestImplement_DocsRuleDelegatedToStep(t *testing.T) {
+	data := prompts.ImplementData{PRDPath: "PRD.md"}
+	result, err := prompts.Implement(data)
+	require.NoError(t, err)
+
+	// Rule #9 about updating docs was removed — docs are handled by the dedicated "Update docs" step.
+	assert.NotContains(t, result, "update the relevant docs")
+	assert.NotContains(t, result, "CLI help text, usage examples, API docs")
+}
+
 func TestImplement_ContextLoading(t *testing.T) {
 	data := prompts.ImplementData{PRDPath: "PRD.md"}
 	result, err := prompts.Implement(data)
@@ -168,6 +178,29 @@ func TestCommit(t *testing.T) {
 	assert.Contains(t, result, "co-author")
 	assert.Contains(t, result, "## Scope")
 	assert.Contains(t, result, "do not modify any code")
+	assert.Equal(t, strings.TrimSpace(result), result)
+}
+
+func TestUpdateDocs(t *testing.T) {
+	result := prompts.UpdateDocs()
+
+	// Context loading
+	assert.Contains(t, result, "CLAUDE.md")
+	assert.Contains(t, result, "AGENTS.md")
+	assert.Contains(t, result, ".memory/")
+
+	// Core behavior: diff-based doc update
+	assert.Contains(t, result, "merge-base")
+	assert.Contains(t, result, "README.md")
+	assert.Contains(t, result, "user-facing")
+
+	// Scope
+	assert.Contains(t, result, "## Scope")
+	assert.Contains(t, result, "Do not modify source code")
+
+	// Skip case
+	assert.Contains(t, result, "nothing")
+
 	assert.Equal(t, strings.TrimSpace(result), result)
 }
 
