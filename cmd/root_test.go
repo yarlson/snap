@@ -1,11 +1,16 @@
 package cmd
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/yarlson/snap/internal/pathutil"
 )
@@ -94,4 +99,137 @@ func TestRootCommand_InvalidFlagDoesNotPrintUsage(t *testing.T) {
 func TestRootCommand_SilencesUsageAndErrors(t *testing.T) {
 	assert.True(t, rootCmd.SilenceUsage, "usage/help should be suppressed on errors")
 	assert.True(t, rootCmd.SilenceErrors, "cobra should not print errors when Execute() handles them")
+}
+
+func TestVersion_DefaultValue(t *testing.T) {
+	assert.Equal(t, "dev", Version, "Version should default to dev")
+}
+
+func TestVersion_FlagRecognized(t *testing.T) {
+	var outBuf strings.Builder
+	rootCmd.SetOut(&outBuf)
+	rootCmd.SetArgs([]string{"--version"})
+
+	err := rootCmd.Execute()
+	require.NoError(t, err)
+
+	assert.Equal(t, "snap dev\n", outBuf.String())
+
+	rootCmd.SetArgs(nil)
+	rootCmd.SetOut(nil)
+}
+
+func TestVersion_LdflagsInjection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	// Build binary with custom version via ldflags.
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build",
+		"-ldflags", "-X github.com/yarlson/snap/cmd.Version=v1.2.3",
+		"-o", binPath, ".",
+	)
+	// Build from the module root (one directory up from cmd/).
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	// Execute binary with --version.
+	run := exec.CommandContext(ctx, binPath, "--version")
+	output, err := run.Output()
+	require.NoError(t, err)
+
+	assert.Equal(t, "snap v1.2.3\n", string(output))
+}
+
+// mustModuleRoot returns the module root by walking up from the current file.
+func mustModuleRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	require.NoError(t, err)
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		require.NotEqual(t, dir, parent, "could not find go.mod")
+		dir = parent
+	}
+}
+
+// ciWorkflow is a minimal representation of GitHub Actions workflow YAML.
+type ciWorkflow struct {
+	On   ciOn             `yaml:"on"`
+	Jobs map[string]ciJob `yaml:"jobs"`
+}
+
+type ciOn struct {
+	Push        ciBranches `yaml:"push"`
+	PullRequest ciBranches `yaml:"pull_request"`
+}
+
+type ciBranches struct {
+	Branches []string `yaml:"branches"`
+}
+
+type ciJob struct {
+	Steps []ciStep `yaml:"steps"`
+}
+
+type ciStep struct {
+	Uses string `yaml:"uses"`
+	Run  string `yaml:"run"`
+}
+
+func loadCIWorkflow(t *testing.T) ciWorkflow {
+	t.Helper()
+	root := mustModuleRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	require.NoError(t, err, ".github/workflows/ci.yml must exist")
+
+	var wf ciWorkflow
+	require.NoError(t, yaml.Unmarshal(data, &wf), "ci.yml must be valid YAML")
+	return wf
+}
+
+func TestCI_WorkflowExistsAndValid(t *testing.T) {
+	loadCIWorkflow(t) // fails if file missing or invalid YAML
+}
+
+func TestCI_TriggersOnMainPushAndPR(t *testing.T) {
+	wf := loadCIWorkflow(t)
+
+	assert.Contains(t, wf.On.Push.Branches, "main", "CI should trigger on push to main")
+	assert.Contains(t, wf.On.PullRequest.Branches, "main", "CI should trigger on PR to main")
+}
+
+func TestCI_RunsLintAndRaceTests(t *testing.T) {
+	wf := loadCIWorkflow(t)
+
+	// Check lint job uses golangci-lint.
+	lintJob, ok := wf.Jobs["lint"]
+	require.True(t, ok, "CI must have a lint job")
+	var hasLint bool
+	for _, step := range lintJob.Steps {
+		if strings.HasPrefix(step.Uses, "golangci/golangci-lint-action@") {
+			hasLint = true
+			break
+		}
+	}
+	assert.True(t, hasLint, "lint job must use golangci-lint-action")
+
+	// Check test job runs go test with -race.
+	testJob, ok := wf.Jobs["test"]
+	require.True(t, ok, "CI must have a test job")
+	var hasRaceTest bool
+	for _, step := range testJob.Steps {
+		if strings.Contains(step.Run, "go test") && strings.Contains(step.Run, "-race") {
+			hasRaceTest = true
+			break
+		}
+	}
+	assert.True(t, hasRaceTest, "test job must run go test with -race flag")
 }

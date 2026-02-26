@@ -19,6 +19,11 @@ import (
 	"github.com/yarlson/snap/internal/workflow"
 )
 
+// Version is set at build time via ldflags:
+//
+//	go build -ldflags "-X github.com/yarlson/snap/cmd.Version=v0.1.0"
+var Version = "dev"
+
 var (
 	tasksDir   string
 	prdPath    string
@@ -44,6 +49,9 @@ Runs continuously until interrupted with Ctrl+C.`,
 }
 
 func init() {
+	rootCmd.Version = Version
+	rootCmd.SetVersionTemplate("snap {{.Version}}\n")
+
 	rootCmd.Flags().StringVarP(&tasksDir, "tasks-dir", "d", "docs/tasks", "Directory containing PRD and task files")
 	rootCmd.Flags().StringVarP(&prdPath, "prd", "p", "", "Path to PRD file (default: <tasks-dir>/PRD.md)")
 	rootCmd.Flags().BoolVar(&freshStart, "fresh", false, "Force fresh start, ignore existing state")

@@ -91,6 +91,7 @@ snap [flags]
 
 | Flag           | Short | Default              | Description                                 |
 | -------------- | ----- | -------------------- | ------------------------------------------- |
+| `--version`    |       |                      | Show version and exit                       |
 | `--tasks-dir`  | `-d`  | `docs/tasks`         | Directory containing PRD and progress files |
 | `--prd`        | `-p`  | `<tasks-dir>/PRD.md` | Path to PRD file                            |
 | `--fresh`      |       | `false`              | Ignore saved state and start fresh          |
