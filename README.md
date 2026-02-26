@@ -102,10 +102,12 @@ snap init [flags]
 ```
 
 Scaffolds a new snap project with template PRD and task files. Safe to run multiple times—existing files are not overwritten. Creates:
+
 - `docs/tasks/PRD.md` (product requirements template)
 - `docs/tasks/TASK1.md` (first task template)
 
 Common usage:
+
 ```bash
 # Initialize project in default location (docs/tasks)
 snap init
@@ -278,12 +280,12 @@ State is automatically cleaned up after each task completes.
 
 ## Troubleshooting
 
-| Symptom                                    | Solution                                                                                                                                  |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `claude: command not found`                | Install the [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli) and ensure it's in your PATH, or set `SNAP_PROVIDER=codex`        |
-| `codex: command not found`                 | Install Codex CLI and ensure `codex` is in your PATH                                                                                      |
-| `failed to load state: corrupt state file` | Run `snap --fresh` to reset state                                                                                                         |
-| snap implements the wrong task             | Run `snap --show-state` to see current progress. Use `snap --fresh` to restart from the first incomplete task |
+| Symptom                                    | Solution                                                                                                                           |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `claude: command not found`                | Install the [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli) and ensure it's in your PATH, or set `SNAP_PROVIDER=codex` |
+| `codex: command not found`                 | Install Codex CLI and ensure `codex` is in your PATH                                                                               |
+| `failed to load state: corrupt state file` | Run `snap --fresh` to reset state                                                                                                  |
+| snap implements the wrong task             | Run `snap --show-state` to see current progress. Use `snap --fresh` to restart from the first incomplete task                      |
 
 ## Development
 
