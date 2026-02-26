@@ -4,15 +4,19 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/yarlson/snap/internal/model"
+	"github.com/yarlson/snap/internal/snapshot"
 	"github.com/yarlson/snap/internal/state"
 	"github.com/yarlson/snap/internal/ui"
 	"github.com/yarlson/snap/internal/workflow"
@@ -745,4 +749,121 @@ func TestRunner_CompletionDeduplication(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestRunner_SnapshotErrorsAreNonFatal(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// No git init — snapshotter will fail on every Capture call.
+	prdPath := filepath.Join(tmpDir, "PRD.md")
+	require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+	stateManager := state.NewManagerWithDir(tmpDir)
+	//nolint:errcheck // cleanup
+	_ = stateManager.Reset()
+
+	mockExec := &MockExecutor{
+		runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+			return nil
+		},
+	}
+
+	var buf bytes.Buffer
+	runner := workflow.NewRunner(mockExec, workflow.Config{
+		TasksDir: tmpDir,
+		PRDPath:  prdPath,
+	},
+		workflow.WithStateManager(stateManager),
+		workflow.WithRunnerOutput(&buf),
+		workflow.WithSnapshotter(snapshot.New(tmpDir)), // not a git repo
+	)
+
+	err := runner.Run(context.Background())
+	assert.NoError(t, err, "workflow should complete despite snapshot failures")
+
+	output := buf.String()
+	assert.Contains(t, output, "snapshot skipped", "snapshot errors should be logged")
+	assert.Contains(t, output, "Iteration complete", "iteration should finish despite snapshot errors")
+}
+
+func TestRunner_SnapshotsCreatedDuringIteration(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Initialize a real git repo so snapshots can work.
+	gitRun := func(args ...string) {
+		t.Helper()
+		cmd := exec.CommandContext(context.Background(), "git", args...)
+		cmd.Dir = tmpDir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=test",
+			"GIT_AUTHOR_EMAIL=test@test.com",
+			"GIT_COMMITTER_NAME=test",
+			"GIT_COMMITTER_EMAIL=test@test.com",
+		)
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %s: %s", strings.Join(args, " "), out)
+	}
+	gitRun("init")
+	gitRun("config", "user.email", "test@test.com")
+	gitRun("config", "user.name", "test")
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte("# init"), 0o600))
+	gitRun("add", ".")
+	gitRun("commit", "-m", "initial commit")
+
+	// Create PRD and task files.
+	prdPath := filepath.Join(tmpDir, "PRD.md")
+	require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+	stateManager := state.NewManagerWithDir(tmpDir)
+	//nolint:errcheck // cleanup
+	_ = stateManager.Reset()
+
+	// Mock executor that modifies a file on each step so snapshots have changes.
+	stepCount := 0
+	mockExec := &MockExecutor{
+		runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+			stepCount++
+			return os.WriteFile(
+				filepath.Join(tmpDir, "README.md"),
+				[]byte(fmt.Sprintf("# step %d", stepCount)),
+				0o600,
+			)
+		},
+	}
+
+	var buf bytes.Buffer
+	runner := workflow.NewRunner(mockExec, workflow.Config{
+		TasksDir: tmpDir,
+		PRDPath:  prdPath,
+	},
+		workflow.WithStateManager(stateManager),
+		workflow.WithRunnerOutput(&buf),
+		workflow.WithSnapshotter(snapshot.New(tmpDir)),
+	)
+
+	err := runner.Run(context.Background())
+	assert.NoError(t, err)
+
+	// Check stash list for snap entries.
+	cmd := exec.CommandContext(context.Background(), "git", "stash", "list")
+	cmd.Dir = tmpDir
+	out, err := cmd.Output()
+	require.NoError(t, err)
+	stashEntries := strings.TrimSpace(string(out))
+	assert.NotEmpty(t, stashEntries, "stash list should contain snapshot entries")
+
+	lines := strings.Split(stashEntries, "\n")
+	// Should have 7 snapshots (steps 1-6 and 8; skip steps 7 and 9 which are commit steps with clean trees).
+	assert.Equal(t, 7, len(lines), "expected snapshots for all non-commit steps")
+
+	// All entries should have snap: prefix.
+	for _, line := range lines {
+		assert.Contains(t, line, "snap:")
+	}
+
+	// Output should mention snapshots.
+	output := buf.String()
+	assert.Contains(t, output, "snapshot saved")
 }

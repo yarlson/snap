@@ -7,12 +7,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/yarlson/snap/internal/model"
 	"github.com/yarlson/snap/internal/prompts"
 	"github.com/yarlson/snap/internal/queue"
+	"github.com/yarlson/snap/internal/snapshot"
 	"github.com/yarlson/snap/internal/state"
 	"github.com/yarlson/snap/internal/ui"
 )
@@ -46,16 +48,20 @@ type Runner struct {
 	stepRunner   *StepRunner
 	config       Config
 	stateManager StateManager
+	snapshotter  *snapshot.Snapshotter
 	promptQueue  *queue.Queue
 	stepContext  *StepContext
 	output       io.Writer
 }
 
 // NewRunner creates a new workflow runner. Output defaults to os.Stdout.
+// Note: snapshots are disabled by default to avoid side effects in tests.
+// Enable snapshots with WithSnapshotter() when snapshots are desired.
 func NewRunner(executor Executor, config Config, opts ...RunnerOption) *Runner {
 	r := &Runner{
 		config:       config,
 		stateManager: state.NewManager(),
+		snapshotter:  nil,
 		promptQueue:  queue.New(),
 		stepContext:  NewStepContext(),
 		output:       os.Stdout,
@@ -83,6 +89,14 @@ func WithRunnerOutput(w io.Writer) RunnerOption {
 func WithStateManager(m StateManager) RunnerOption {
 	return func(r *Runner) {
 		r.stateManager = m
+	}
+}
+
+// WithSnapshotter overrides the default snapshotter.
+// Useful for testing with a custom working directory.
+func WithSnapshotter(s *snapshot.Snapshotter) RunnerOption {
+	return func(r *Runner) {
+		r.snapshotter = s
 	}
 }
 
@@ -356,6 +370,17 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 		// Execute step with numbering
 		if err := r.stepRunner.RunStepNumbered(ctx, stepNum, totalSteps, step.name, step.model, fullArgs...); err != nil {
 			return false, err
+		}
+
+		// Capture a snapshot of the working tree after this step (if snapshotter is enabled).
+		// Skip snapshots for commit steps (tree is clean after commit, no-op operation).
+		if r.snapshotter != nil && !strings.Contains(step.name, "Commit") {
+			snapMsg := fmt.Sprintf("snap: %s step %d/%d — %s", taskLabel, stepNum, totalSteps, step.name)
+			if created, snapErr := r.snapshotter.Capture(ctx, snapMsg); snapErr != nil {
+				fmt.Fprintf(r.output, "  snapshot skipped: %v\n", snapErr)
+			} else if created {
+				fmt.Fprintln(r.output, "  snapshot saved")
+			}
 		}
 
 		// Drain queued user prompts between steps.
