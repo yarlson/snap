@@ -480,6 +480,43 @@ func TestJSONFlag_IgnoredWithoutShowState(t *testing.T) {
 	assert.NotContains(t, outputStr, "{", "should not produce JSON output")
 }
 
+func TestE2E_TaskFileErrorRecovery_CaseMismatch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	// Build the snap binary.
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	// Create a project directory with a tasks subdirectory containing a lowercase task file.
+	projectDir := t.TempDir()
+	tasksSubDir := filepath.Join(projectDir, "docs", "tasks")
+	require.NoError(t, os.MkdirAll(tasksSubDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tasksSubDir, "task1.md"), []byte("# Task 1\n"), 0o600))
+
+	// Create a mock provider so pre-flight passes.
+	mockBinDir := t.TempDir()
+	mockClaude := filepath.Join(mockBinDir, "claude")
+	require.NoError(t, os.WriteFile(mockClaude, []byte("#!/bin/sh\nexit 0\n"), 0o755)) //nolint:gosec // G306: test mock script needs exec permission
+
+	run := exec.CommandContext(ctx, binPath)
+	run.Dir = projectDir
+	run.Env = append(os.Environ(), "PATH="+mockBinDir+":/usr/bin:/bin")
+	output, runErr := run.CombinedOutput()
+
+	require.Error(t, runErr)
+	outputStr := string(output)
+	assert.Contains(t, outputStr, "Found: task1.md")
+	assert.Contains(t, outputStr, "rename to TASK1.md")
+	assert.Contains(t, outputStr, "snap init")
+}
+
 func TestCI_RunsLintAndRaceTests(t *testing.T) {
 	wf := loadCIWorkflow(t)
 

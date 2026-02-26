@@ -269,7 +269,8 @@ func (r *Runner) selectIdleTask(workflowState *state.State) (bool, error) {
 		return false, fmt.Errorf("failed to scan tasks: %w", err)
 	}
 	if len(tasks) == 0 {
-		return false, fmt.Errorf("no task files found in %s", r.config.TasksDir)
+		hints := DiagnoseEmptyTaskDir(r.config.TasksDir)
+		return false, fmt.Errorf("%s", FormatTaskDirError(r.config.TasksDir, hints))
 	}
 
 	next := SelectNextTask(tasks, workflowState.CompletedTaskIDs)

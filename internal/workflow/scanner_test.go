@@ -3,6 +3,7 @@ package workflow
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -175,6 +176,145 @@ func TestSelectNextTask(t *testing.T) {
 		next := SelectNextTask(tasks, []string{"TASK1"})
 		assert.NotNil(t, next)
 		assert.Equal(t, "TASK2", next.ID)
+	})
+}
+
+func TestDiagnoseEmptyTaskDir(t *testing.T) {
+	t.Run("detects lowercase task file", func(t *testing.T) {
+		dir := t.TempDir()
+		createFile(t, dir, "task1.md", "task 1")
+
+		hints := DiagnoseEmptyTaskDir(dir)
+		require.Len(t, hints, 1)
+		assert.Contains(t, hints[0], "task1.md")
+		assert.Contains(t, hints[0], "TASK1.md")
+	})
+
+	t.Run("detects mixed case task file", func(t *testing.T) {
+		dir := t.TempDir()
+		createFile(t, dir, "Task2.md", "task 2")
+
+		hints := DiagnoseEmptyTaskDir(dir)
+		require.Len(t, hints, 1)
+		assert.Contains(t, hints[0], "Task2.md")
+		assert.Contains(t, hints[0], "TASK2.md")
+	})
+
+	t.Run("detects PRD with embedded task headers", func(t *testing.T) {
+		dir := t.TempDir()
+		createFile(t, dir, "PRD.md", "# My PRD\n\n## TASK1: Feature\n\nSome content\n## TASK2: Other\n")
+
+		hints := DiagnoseEmptyTaskDir(dir)
+		require.Len(t, hints, 1)
+		assert.Contains(t, hints[0], "PRD.md contains TASK headers")
+		assert.Contains(t, hints[0], "separate files")
+	})
+
+	t.Run("returns empty for empty directory", func(t *testing.T) {
+		dir := t.TempDir()
+
+		hints := DiagnoseEmptyTaskDir(dir)
+		assert.Empty(t, hints)
+	})
+
+	t.Run("detects both case mismatch and PRD headers", func(t *testing.T) {
+		dir := t.TempDir()
+		createFile(t, dir, "task1.md", "task 1")
+		createFile(t, dir, "PRD.md", "# PRD\n\n## TASK1: Feature\n")
+
+		hints := DiagnoseEmptyTaskDir(dir)
+		require.Len(t, hints, 2)
+		assert.Contains(t, hints[0], "task1.md")
+		assert.Contains(t, hints[1], "PRD.md contains TASK headers")
+	})
+
+	t.Run("no PRD hint when PRD.md does not exist", func(t *testing.T) {
+		dir := t.TempDir()
+		createFile(t, dir, "notes.md", "just notes")
+
+		hints := DiagnoseEmptyTaskDir(dir)
+		assert.Empty(t, hints)
+	})
+
+	t.Run("ignores correctly named TASK files", func(t *testing.T) {
+		dir := t.TempDir()
+		// This scenario shouldn't normally happen (DiagnoseEmptyTaskDir is called
+		// only when ScanTasks returns empty), but verify no false positives.
+		createFile(t, dir, "TASK1.md", "task 1")
+
+		hints := DiagnoseEmptyTaskDir(dir)
+		assert.Empty(t, hints)
+	})
+
+	t.Run("handles nonexistent directory gracefully", func(t *testing.T) {
+		hints := DiagnoseEmptyTaskDir("/nonexistent/path")
+		assert.Empty(t, hints)
+	})
+
+	t.Run("detects multiple case-mismatched files", func(t *testing.T) {
+		dir := t.TempDir()
+		createFile(t, dir, "task1.md", "task 1")
+		createFile(t, dir, "Task2.md", "task 2")
+
+		hints := DiagnoseEmptyTaskDir(dir)
+		require.Len(t, hints, 2)
+		joined := strings.Join(hints, "\n")
+		assert.Contains(t, joined, "task1.md")
+		assert.Contains(t, joined, "TASK1.md")
+		assert.Contains(t, joined, "Task2.md")
+		assert.Contains(t, joined, "TASK2.md")
+	})
+
+	t.Run("no PRD hint when PRD has no task headers", func(t *testing.T) {
+		dir := t.TempDir()
+		createFile(t, dir, "PRD.md", "# My PRD\n\nJust a regular document\n")
+
+		hints := DiagnoseEmptyTaskDir(dir)
+		assert.Empty(t, hints)
+	})
+}
+
+func TestFormatTaskDirError(t *testing.T) {
+	t.Run("no hints produces standard error", func(t *testing.T) {
+		got := FormatTaskDirError("docs/tasks", nil)
+		expected := "Error: no task files found in docs/tasks/\n\n" +
+			"snap looks for files named TASK1.md, TASK2.md, etc.\n\n" +
+			"To get started:\n  snap init"
+		assert.Equal(t, expected, got)
+	})
+
+	t.Run("case-mismatch hint follows DESIGN.md pattern", func(t *testing.T) {
+		hints := []string{"Found: task1.md (rename to TASK1.md)"}
+		got := FormatTaskDirError("docs/tasks", hints)
+		expected := "Error: no task files found in docs/tasks/\n\n" +
+			"snap looks for files named TASK1.md, TASK2.md, etc.\n" +
+			"Found: task1.md (rename to TASK1.md)\n\n" +
+			"To get started:\n  snap init"
+		assert.Equal(t, expected, got)
+	})
+
+	t.Run("PRD hint follows DESIGN.md pattern", func(t *testing.T) {
+		hints := []string{"PRD.md contains TASK headers, but snap needs separate files: TASK1.md, TASK2.md, etc."}
+		got := FormatTaskDirError("docs/tasks", hints)
+		expected := "Error: no task files found in docs/tasks/\n\n" +
+			"snap looks for files named TASK1.md, TASK2.md, etc.\n" +
+			"PRD.md contains TASK headers, but snap needs separate files: TASK1.md, TASK2.md, etc.\n\n" +
+			"To get started:\n  snap init"
+		assert.Equal(t, expected, got)
+	})
+
+	t.Run("multiple hints each on separate line", func(t *testing.T) {
+		hints := []string{
+			"Found: task1.md (rename to TASK1.md)",
+			"Found: Task2.md (rename to TASK2.md)",
+		}
+		got := FormatTaskDirError("docs/tasks", hints)
+		expected := "Error: no task files found in docs/tasks/\n\n" +
+			"snap looks for files named TASK1.md, TASK2.md, etc.\n" +
+			"Found: task1.md (rename to TASK1.md)\n" +
+			"Found: Task2.md (rename to TASK2.md)\n\n" +
+			"To get started:\n  snap init"
+		assert.Equal(t, expected, got)
 	})
 }
 
