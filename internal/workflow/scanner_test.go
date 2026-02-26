@@ -42,7 +42,7 @@ func TestScanTasks(t *testing.T) {
 		dir := t.TempDir()
 		createFile(t, dir, "TASK1.md", "task 1")
 		createFile(t, dir, "PRD.md", "prd")
-		createFile(t, dir, "progress.md", "progress")
+		createFile(t, dir, "notes.md", "notes")
 		createFile(t, dir, "TECHNOLOGY.md", "tech")
 		createFile(t, dir, "TASKS.md", "tasks")
 		createFile(t, dir, "README.md", "readme")
@@ -58,7 +58,7 @@ func TestScanTasks(t *testing.T) {
 	t.Run("returns empty for no task files", func(t *testing.T) {
 		dir := t.TempDir()
 		createFile(t, dir, "PRD.md", "prd")
-		createFile(t, dir, "progress.md", "progress")
+		createFile(t, dir, "notes.md", "notes")
 
 		tasks, err := ScanTasks(dir)
 		require.NoError(t, err)

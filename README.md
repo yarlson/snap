@@ -48,28 +48,30 @@ mkdir -p docs/tasks
 ```markdown
 # My Feature Set
 
-## TASK1: User authentication
+Overview of what you're building.
+```
+
+3. Create your first task file (`docs/tasks/TASK1.md`):
+
+```markdown
+# TASK1: User authentication
 
 Implement JWT-based authentication with login and logout endpoints.
 
-Requirements:
+## Requirements
 
 - POST /login accepts email/password, returns JWT
 - POST /logout invalidates token
 - Middleware validates JWT on protected routes
 
-## TASK2: User profile CRUD
+## Acceptance Criteria
 
-...
+- [ ] Login endpoint returns JWT on valid credentials
+- [ ] Logout endpoint invalidates token
+- [ ] Middleware rejects requests without valid JWT
 ```
 
-3. Create a progress tracker (`docs/tasks/progress.md`):
-
-```markdown
-# Implementation Progress
-
-Track completed tasks here. Format: `TASK<n> done`
-```
+Create additional task files (`TASK2.md`, `TASK3.md`, ...) for each feature.
 
 4. Run snap:
 
@@ -77,7 +79,7 @@ Track completed tasks here. Format: `TASK<n> done`
 snap
 ```
 
-snap implements TASK1, runs tests, reviews code, commits, updates progress, then moves to TASK2. Press Ctrl+C to stop. Run `snap` again to resume.
+snap implements TASK1, runs tests, reviews code, commits, then moves to TASK2. Press Ctrl+C to stop. Run `snap` again to resume.
 
 See `example/` for a complete working example.
 
@@ -92,7 +94,7 @@ snap [flags]
 | Flag           | Short | Default              | Description                                 |
 | -------------- | ----- | -------------------- | ------------------------------------------- |
 | `--version`    |       |                      | Show version and exit                       |
-| `--tasks-dir`  | `-d`  | `docs/tasks`         | Directory containing PRD and progress files |
+| `--tasks-dir`  | `-d`  | `docs/tasks`         | Directory containing PRD and task files     |
 | `--prd`        | `-p`  | `<tasks-dir>/PRD.md` | Path to PRD file                            |
 | `--fresh`      |       | `false`              | Ignore saved state and start fresh          |
 | `--show-state` |       | `false`              | Display current workflow state and exit     |
@@ -140,16 +142,16 @@ Supported values:
 
 snap runs a 10-step workflow for each feature task:
 
-1. **Implement** - Reads PRD and progress, implements only the next task
-2. **Check** - Verifies the task is fully implemented
-3. **Validate** - Runs linters and tests, fixes any issues
-4. **Review** - Reviews all changes with code-review
-5. **Fix** - Addresses review feedback
-6. **Validate fix** - Re-runs linters and tests after fixes
-7. **Commit** - Stages and commits with conventional commit message
-8. **Update vault** - Updates project memory for future context
-9. **Update progress** - Marks task as done in progress.md
-10. **Commit** - Commits progress tracking
+1. **Implement** - Reads task file and implements the feature
+2. **Ensure completeness** - Verifies the task is fully implemented
+3. **Lint & test** - Runs linters and tests, fixes any issues
+4. **Code review** - Reviews all changes
+5. **Apply fixes** - Addresses review feedback
+6. **Verify fixes** - Re-runs linters and tests after fixes
+7. **Update docs** - Updates user-facing documentation
+8. **Commit code** - Stages and commits with conventional commit message
+9. **Update memory** - Updates project memory vault for future context
+10. **Commit memory** - Commits memory vault changes
 
 After step 10, snap starts the next task.
 
@@ -175,16 +177,16 @@ snap expects this layout:
 ```
 your-project/
 ├── docs/tasks/
-│   ├── PRD.md        # Feature requirements (TASK1, TASK2, ...)
-│   └── progress.md   # Tracks completed tasks
+│   ├── PRD.md        # Product context and overview
+│   ├── TASK1.md      # First task specification
+│   ├── TASK2.md      # Second task specification
+│   └── ...
 ├── .memory/          # Optional: project context for Claude
 └── .snap/
     └── state.json    # Auto-managed workflow checkpoint
 ```
 
-**PRD format**: Use `## TASK<n>: <title>` headers. snap reads these sequentially and implements one at a time.
-
-**Progress format**: snap appends `TASK<n> done` after each task. Start empty or pre-populate with completed tasks.
+**Task files**: Name them `TASK1.md`, `TASK2.md`, etc. snap discovers and implements them in order.
 
 ## Resume from interruption
 
@@ -199,7 +201,7 @@ State is automatically cleaned up after each task completes.
 | `claude: command not found`                | Install the [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli) and ensure it's in your PATH, or set `SNAP_PROVIDER=codex`        |
 | `codex: command not found`                 | Install Codex CLI and ensure `codex` is in your PATH                                                                                      |
 | `failed to load state: corrupt state file` | Run `snap --fresh` to reset state                                                                                                         |
-| snap implements the wrong task             | Check `docs/tasks/progress.md`. snap picks the first task not marked as done. Edit `progress.md` manually if a task is incorrectly marked |
+| snap implements the wrong task             | Run `snap --show-state` to see current progress. Use `snap --fresh` to restart from the first incomplete task |
 
 ## Development
 
