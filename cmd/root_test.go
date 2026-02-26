@@ -195,6 +195,40 @@ func loadCIWorkflow(t *testing.T) ciWorkflow {
 	return wf
 }
 
+func TestPreflightProviderCLI_MissingBinary(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	// Build the snap binary.
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	// Create a tasks directory with a valid task file.
+	tasksDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tasksDir, "TASK1.md"), []byte("# Task 1\n"), 0o600))
+
+	// Run snap with an empty PATH so claude is not found.
+	run := exec.CommandContext(ctx, binPath, "-d", tasksDir)
+	run.Env = append(os.Environ(), "PATH="+t.TempDir())
+	output, runErr := run.CombinedOutput()
+
+	require.Error(t, runErr)
+	outputStr := string(output)
+	assert.Contains(t, outputStr, "not found in PATH")
+	assert.Contains(t, outputStr, "https://")
+
+	// Verify exit code is 1.
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, runErr, &exitErr)
+	assert.Equal(t, 1, exitErr.ExitCode())
+}
+
 func TestCI_WorkflowExistsAndValid(t *testing.T) {
 	loadCIWorkflow(t) // fails if file missing or invalid YAML
 }

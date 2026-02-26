@@ -71,6 +71,12 @@ func run(_ *cobra.Command, _ []string) error {
 		return handleShowState()
 	}
 
+	// Pre-flight: validate provider CLI is available in PATH.
+	providerName := provider.ResolveProviderName()
+	if err := provider.ValidateCLI(providerName); err != nil {
+		return err
+	}
+
 	// Resolve paths with defaults from tasks directory
 	prdPath = pathutil.ResolvePRDPath(tasksDir, prdPath)
 
