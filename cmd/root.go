@@ -119,7 +119,7 @@ func run(_ *cobra.Command, _ []string) error {
 		signal.Notify(winchChan, syscall.SIGWINCH)
 		go func() {
 			for range winchChan {
-				w, _, err := term.GetSize(int(os.Stdout.Fd()))
+				w, _, err := term.GetSize(int(os.Stdout.Fd())) //nolint:gosec // G115: fd fits int
 				if err == nil {
 					im.SetTermWidth(w)
 				}
@@ -128,7 +128,7 @@ func run(_ *cobra.Command, _ []string) error {
 		defer signal.Stop(winchChan)
 
 		// Set initial terminal width.
-		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil { //nolint:gosec // G115: fd fits int
 			im.SetTermWidth(w)
 		}
 

@@ -59,7 +59,7 @@ func newRawReader(f *os.File, q *queue.Queue, stop chan struct{}) *rawReader {
 		source: f,
 		queue:  q,
 		stop:   stop,
-		fd:     int(f.Fd()),
+		fd:     int(f.Fd()), //nolint:gosec // G115: fd fits int
 	}
 }
 

@@ -59,7 +59,7 @@ func TestImplement_QualityGuardrails(t *testing.T) {
 	assert.Contains(t, result, "edge cases")
 
 	// TDD guardrails
-	assert.Contains(t, result, "failing test first")
+	assert.Contains(t, result, "failing E2E or integration test")
 	assert.Contains(t, result, "minimal code to pass")
 
 	// Architecture guardrails
@@ -104,7 +104,7 @@ func TestEnsureCompleteness(t *testing.T) {
 	assert.Contains(t, result, "fully implemented")
 	assert.Contains(t, result, "docs/tasks/TASK1.md")
 	assert.Contains(t, result, "TASK1")
-	assert.Contains(t, result, "missing")
+	assert.Contains(t, result, "not verified")
 	assert.Contains(t, result, "acceptance criterion")
 	assert.Contains(t, result, "## Context")
 	assert.Contains(t, result, "CLAUDE.md")
@@ -176,7 +176,7 @@ func TestMemoryUpdate(t *testing.T) {
 
 	// Scope section
 	assert.Contains(t, result, "## Scope")
-	assert.Contains(t, result, "do not modify any source code")
+	assert.Contains(t, result, "Do not modify any source code")
 
 	// Key vault markers
 	assert.Contains(t, result, ".memory/")
