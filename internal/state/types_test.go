@@ -2,6 +2,7 @@ package state
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -265,6 +266,88 @@ func TestState_IsTaskComplete(t *testing.T) {
 
 			if got := state.IsTaskComplete(); got != tt.want {
 				t.Errorf("IsTaskComplete() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestState_Summary(t *testing.T) {
+	stubStepName := func(n int) string {
+		names := map[int]string{
+			1: "Implement", 2: "Ensure completeness", 3: "Lint & test",
+			4: "Code review", 5: "Apply fixes", 6: "Verify fixes",
+			7: "Update docs", 8: "Commit code", 9: "Update memory", 10: "Commit memory",
+		}
+		if name, ok := names[n]; ok {
+			return name
+		}
+		return "unknown"
+	}
+
+	tests := []struct {
+		name     string
+		state    *State
+		contains []string
+	}{
+		{
+			name: "active task at step 5",
+			state: &State{
+				CurrentTaskID:    "TASK2",
+				CurrentStep:      5,
+				TotalSteps:       10,
+				CompletedTaskIDs: []string{"TASK1"},
+			},
+			contains: []string{"TASK2 in progress", "step 5/10", "Apply fixes", "1 task completed"},
+		},
+		{
+			name: "no active task with 3 completed",
+			state: &State{
+				CurrentTaskID:    "",
+				CurrentStep:      1,
+				TotalSteps:       10,
+				CompletedTaskIDs: []string{"TASK1", "TASK2", "TASK3"},
+			},
+			contains: []string{"No active task", "3 tasks completed"},
+		},
+		{
+			name: "active task at step 1",
+			state: &State{
+				CurrentTaskID:    "TASK1",
+				CurrentStep:      1,
+				TotalSteps:       10,
+				CompletedTaskIDs: []string{},
+			},
+			contains: []string{"step 1/10", "Implement"},
+		},
+		{
+			name: "active task at step 10",
+			state: &State{
+				CurrentTaskID:    "TASK5",
+				CurrentStep:      10,
+				TotalSteps:       10,
+				CompletedTaskIDs: []string{"TASK1", "TASK2", "TASK3", "TASK4"},
+			},
+			contains: []string{"step 10/10", "Commit memory"},
+		},
+		{
+			name: "no active task with 0 completed",
+			state: &State{
+				CurrentTaskID:    "",
+				CurrentStep:      1,
+				TotalSteps:       10,
+				CompletedTaskIDs: []string{},
+			},
+			contains: []string{"No active task", "0 tasks completed"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary := tt.state.Summary(stubStepName)
+			for _, s := range tt.contains {
+				if !strings.Contains(summary, s) {
+					t.Errorf("Summary() = %q, want it to contain %q", summary, s)
+				}
 			}
 		})
 	}

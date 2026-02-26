@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -341,6 +342,142 @@ func TestGracefulSignalHandling_InterruptedMessage(t *testing.T) {
 
 	output := combinedOut.String()
 	assert.Contains(t, output, "Stopped by user", "output should contain interruption message")
+}
+
+func TestShowState_HumanReadable_ActiveTask(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	// Build the snap binary.
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	// Create a project directory with a state file containing an active task.
+	projectDir := t.TempDir()
+	stateDir := filepath.Join(projectDir, ".snap")
+	require.NoError(t, os.MkdirAll(stateDir, 0o755))
+
+	stateJSON := `{
+		"tasks_dir": "docs/tasks",
+		"current_task_id": "TASK2",
+		"current_task_file": "TASK2.md",
+		"current_step": 5,
+		"total_steps": 10,
+		"completed_task_ids": ["TASK1"],
+		"session_id": "",
+		"last_updated": "2025-01-01T00:00:00Z",
+		"prd_path": "docs/tasks/PRD.md"
+	}`
+	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "state.json"), []byte(stateJSON), 0o600))
+
+	run := exec.CommandContext(ctx, binPath, "--show-state")
+	run.Dir = projectDir
+	output, err := run.CombinedOutput()
+	require.NoError(t, err)
+
+	outputStr := string(output)
+	assert.Contains(t, outputStr, "TASK2 in progress")
+	assert.Contains(t, outputStr, "step 5/10")
+	assert.Contains(t, outputStr, "Apply fixes")
+	assert.NotContains(t, outputStr, "{", "human-readable output should not contain JSON")
+}
+
+func TestShowState_JSON_ActiveTask(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	projectDir := t.TempDir()
+	stateDir := filepath.Join(projectDir, ".snap")
+	require.NoError(t, os.MkdirAll(stateDir, 0o755))
+
+	stateJSON := `{
+		"tasks_dir": "docs/tasks",
+		"current_task_id": "TASK2",
+		"current_task_file": "TASK2.md",
+		"current_step": 5,
+		"total_steps": 10,
+		"completed_task_ids": ["TASK1"],
+		"session_id": "",
+		"last_updated": "2025-01-01T00:00:00Z",
+		"prd_path": "docs/tasks/PRD.md"
+	}`
+	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "state.json"), []byte(stateJSON), 0o600))
+
+	run := exec.CommandContext(ctx, binPath, "--show-state", "--json")
+	run.Dir = projectDir
+	output, err := run.CombinedOutput()
+	require.NoError(t, err)
+
+	// Verify output is valid JSON.
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal(output, &parsed), "output should be valid JSON")
+	assert.Equal(t, "TASK2", parsed["current_task_id"])
+}
+
+func TestShowState_NoStateFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	// Run from a temp dir with no state file.
+	projectDir := t.TempDir()
+	run := exec.CommandContext(ctx, binPath, "--show-state")
+	run.Dir = projectDir
+	output, err := run.CombinedOutput()
+	require.NoError(t, err)
+
+	assert.Contains(t, string(output), "No state file exists")
+}
+
+func TestJSONFlag_IgnoredWithoutShowState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	// Build the snap binary.
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	// Run snap with --json but without --show-state, using empty PATH so
+	// provider validation fails. If --json were not ignored, we'd get JSON
+	// output or a different error. Instead we expect the normal workflow
+	// flow which hits the provider pre-flight check.
+	run := exec.CommandContext(ctx, binPath, "--json")
+	run.Env = append(os.Environ(), "PATH="+t.TempDir())
+	output, runErr := run.CombinedOutput()
+
+	require.Error(t, runErr)
+	outputStr := string(output)
+	assert.Contains(t, outputStr, "not found in PATH", "--json without --show-state should run normal workflow")
+	assert.NotContains(t, outputStr, "{", "should not produce JSON output")
 }
 
 func TestCI_RunsLintAndRaceTests(t *testing.T) {

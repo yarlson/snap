@@ -62,6 +62,30 @@ func (r *StepRunner) RunStepNumbered(ctx context.Context, current, total int, st
 	return nil
 }
 
+// stepNames maps 1-indexed step numbers to their display names.
+// Must be kept in sync with the steps slice in Runner.runIteration.
+var stepNames = [workflowStepCount]string{
+	"Implement",
+	"Ensure completeness",
+	"Lint & test",
+	"Code review",
+	"Apply fixes",
+	"Verify fixes",
+	"Update docs",
+	"Commit code",
+	"Update memory",
+	"Commit memory",
+}
+
+// StepName returns the display name for a 1-indexed step number.
+// Returns "unknown" for out-of-range inputs.
+func StepName(stepNum int) string {
+	if stepNum < 1 || stepNum > workflowStepCount {
+		return "unknown"
+	}
+	return stepNames[stepNum-1]
+}
+
 // PromptOption is a function that modifies prompt building behavior.
 type PromptOption func(*promptConfig)
 

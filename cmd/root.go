@@ -30,6 +30,7 @@ var (
 	prdPath    string
 	freshStart bool
 	showState  bool
+	jsonOutput bool
 )
 
 var rootCmd = &cobra.Command{
@@ -57,6 +58,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&prdPath, "prd", "p", "", "Path to PRD file (default: <tasks-dir>/PRD.md)")
 	rootCmd.Flags().BoolVar(&freshStart, "fresh", false, "Force fresh start, ignore existing state")
 	rootCmd.Flags().BoolVar(&showState, "show-state", false, "Show current state and exit")
+	rootCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON (only with --show-state)")
 }
 
 func Execute() {
@@ -181,12 +183,15 @@ func handleShowState() error {
 		return fmt.Errorf("failed to load state: %w", err)
 	}
 
-	// Pretty-print the state as JSON
-	data, err := json.MarshalIndent(workflowState, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal state: %w", err)
+	if jsonOutput {
+		data, err := json.MarshalIndent(workflowState, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal state: %w", err)
+		}
+		fmt.Println(string(data))
+		return nil
 	}
 
-	fmt.Println(string(data))
+	fmt.Println(workflowState.Summary(workflow.StepName))
 	return nil
 }

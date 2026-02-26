@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -54,6 +55,21 @@ func NewState(tasksDir, prdPath string, totalSteps int) *State {
 		LastError:        "",
 		PRDPath:          prdPath,
 	}
+}
+
+// Summary returns a human-readable one-line summary of the workflow state.
+// The stepName function maps a 1-indexed step number to its display name.
+func (s *State) Summary(stepName func(int) string) string {
+	completed := len(s.CompletedTaskIDs)
+	label := "tasks"
+	if completed == 1 {
+		label = "task"
+	}
+	if s.CurrentTaskID == "" {
+		return fmt.Sprintf("No active task — %d %s completed", completed, label)
+	}
+	return fmt.Sprintf("%s in progress — step %d/%d: %s — %d %s completed",
+		s.CurrentTaskID, s.CurrentStep, s.TotalSteps, stepName(s.CurrentStep), completed, label)
 }
 
 // IsValid checks if the state satisfies invariants.

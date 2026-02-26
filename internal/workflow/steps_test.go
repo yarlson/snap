@@ -110,6 +110,34 @@ func TestStepRunner_RunStepNumbered_PrintsTimingOnFailure(t *testing.T) {
 	assert.Contains(t, output, "s")
 }
 
+func TestStepName(t *testing.T) {
+	tests := []struct {
+		name     string
+		stepNum  int
+		expected string
+	}{
+		{"step 1", 1, "Implement"},
+		{"step 2", 2, "Ensure completeness"},
+		{"step 3", 3, "Lint & test"},
+		{"step 4", 4, "Code review"},
+		{"step 5", 5, "Apply fixes"},
+		{"step 6", 6, "Verify fixes"},
+		{"step 7", 7, "Update docs"},
+		{"step 8", 8, "Commit code"},
+		{"step 9", 9, "Update memory"},
+		{"step 10", 10, "Commit memory"},
+		{"step 0 out of range", 0, "unknown"},
+		{"step 11 out of range", 11, "unknown"},
+		{"negative step", -1, "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, workflow.StepName(tt.stepNum))
+		})
+	}
+}
+
 func TestWorkflow_BuildPrompt(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -122,7 +122,8 @@ snap init --tasks-dir ./features
 | `--tasks-dir`  | `-d`  | `docs/tasks`         | Directory containing PRD and task files (persistent)   |
 | `--prd`        | `-p`  | `<tasks-dir>/PRD.md` | Path to PRD file                                       |
 | `--fresh`      |       | `false`              | Ignore saved state and start fresh                     |
-| `--show-state` |       | `false`              | Display current workflow state and exit                |
+| `--show-state` |       | `false`              | Display human-readable workflow state summary and exit |
+| `--json`       |       | `false`              | Output raw JSON (only with `--show-state`)             |
 
 ### Examples
 
@@ -145,8 +146,41 @@ snap -d docs -p docs/requirements.md
 # Ignore saved state, start from scratch
 snap --fresh
 
-# Show current workflow checkpoint
+# Show current workflow checkpoint (human-readable format)
 snap --show-state
+
+# Show current workflow checkpoint as JSON
+snap --show-state --json
+```
+
+### Show state output
+
+The `--show-state` flag displays workflow progress. By default, it shows a human-readable summary:
+
+```
+TASK2 in progress — step 5/10: Apply fixes — 1 task completed
+```
+
+Or when no task is active:
+
+```
+No active task — 2 tasks completed
+```
+
+To get the complete workflow state as JSON, use `--show-state --json`:
+
+```json
+{
+  "tasks_dir": "docs/tasks",
+  "current_task_id": "TASK2",
+  "current_task_file": "TASK2.md",
+  "current_step": 5,
+  "total_steps": 10,
+  "completed_task_ids": ["TASK1"],
+  "session_id": "",
+  "last_updated": "2025-01-15T14:32:22Z",
+  "prd_path": "docs/tasks/PRD.md"
+}
 ```
 
 ## Configuration
