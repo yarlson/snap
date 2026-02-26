@@ -12,6 +12,9 @@ const boxContentWidth = BoxWidth - 4
 // QueuedPrompt formats the boxed acknowledgment shown when a user prompt is queued.
 // It shows the prompt text, which step is currently running, and how many prompts are queued.
 func QueuedPrompt(prompt string, currentStep, totalSteps int, stepName string, queueLen int) string {
+	prompt = StripColors(prompt)
+	stepName = StripColors(stepName)
+
 	colorCode := ResolveColor(ColorInfo)
 	styleCode := ResolveStyle(WeightBold)
 	resetCode := ResolveStyle(WeightNormal)
@@ -89,7 +92,7 @@ func QueueStatus(prompts []string) string {
 		dimCode, len(prompts), noun, resetCode)
 
 	for i, p := range prompts {
-		fmt.Fprintf(&builder, "%s  %d. %s%s\n", dimCode, i+1, p, resetCode)
+		fmt.Fprintf(&builder, "%s  %d. %s%s\n", dimCode, i+1, StripColors(p), resetCode)
 	}
 
 	return builder.String()

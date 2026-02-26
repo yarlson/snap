@@ -9,47 +9,26 @@ import (
 )
 
 // Header formats a major section header (e.g., "Implementing next task").
-func Header(text string) string {
-	// Calculate content width: BoxWidth - border chars (2) - padding (2 + 2)
-	contentWidth := BoxWidth - 2 - BoxPaddingLeft - BoxPaddingRight
+// If description is non-empty, a dim indented line is shown below the title.
+func Header(text, description string) string {
 	colorCode := ResolveColor(ColorPrimary)
 	styleCode := ResolveStyle(WeightBold)
 	resetCode := ResolveStyle(WeightNormal)
 
-	// Top border
-	topBorder := fmt.Sprintf("%s%s╔%s╗%s\n",
-		styleCode, colorCode,
-		strings.Repeat("═", BoxWidth-2),
-		resetCode)
+	titleLine := fmt.Sprintf("%s%s▶ %s%s", styleCode, colorCode, text, resetCode)
 
-	// Empty padding line
-	emptyLine := fmt.Sprintf("%s%s║%s║%s\n",
-		styleCode, colorCode,
-		strings.Repeat(" ", BoxWidth-2),
-		resetCode)
+	if description != "" {
+		maxLen := SeparatorWidth - 2 // account for 2-char indent
+		descRunes := []rune(description)
+		if len(descRunes) > maxLen {
+			description = string(descRunes[:maxLen-1]) + "…"
+		}
+		dimCode := ResolveStyle(WeightDim)
+		descLine := fmt.Sprintf("  %s%s%s", dimCode, description, resetCode)
+		return VerticalSpace(SpaceMD) + titleLine + "\n" + descLine + VerticalSpace(SpaceXS)
+	}
 
-	// Text line with padding
-	textLine := fmt.Sprintf("%s%s║%s%-*s%s║%s\n",
-		styleCode, colorCode,
-		strings.Repeat(" ", BoxPaddingLeft),
-		contentWidth,
-		text,
-		strings.Repeat(" ", BoxPaddingRight),
-		resetCode)
-
-	// Bottom border
-	bottomBorder := fmt.Sprintf("%s%s╚%s╝%s",
-		styleCode, colorCode,
-		strings.Repeat("═", BoxWidth-2),
-		resetCode)
-
-	return VerticalSpace(SpaceMD) +
-		topBorder +
-		emptyLine +
-		textLine +
-		emptyLine +
-		bottomBorder +
-		VerticalSpace(SpaceXS)
+	return VerticalSpace(SpaceMD) + titleLine + VerticalSpace(SpaceXS)
 }
 
 // Step formats a step header (e.g., "Step: Implement next task").

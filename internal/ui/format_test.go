@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/yarlson/snap/internal/ui"
 )
@@ -44,7 +45,7 @@ func TestStripColors(t *testing.T) {
 
 func TestFormatters(t *testing.T) {
 	// Test that formatters return non-empty strings
-	assert.NotEmpty(t, ui.Header("Test"))
+	assert.NotEmpty(t, ui.Header("Test", ""))
 	assert.NotEmpty(t, ui.Step("Test"))
 	assert.NotEmpty(t, ui.Success("Test"))
 	assert.NotEmpty(t, ui.Error("Test"))
@@ -54,7 +55,7 @@ func TestFormatters(t *testing.T) {
 	assert.NotEmpty(t, ui.Separator())
 
 	// Test that stripped output contains expected text
-	assert.Contains(t, ui.StripColors(ui.Header("Test")), "Test")
+	assert.Contains(t, ui.StripColors(ui.Header("Test", "")), "Test")
 	assert.Contains(t, ui.StripColors(ui.Step("Test")), "▶ Test")
 	assert.Equal(t, " ✓ Test", ui.StripColors(ui.Success("Test")))
 	assert.Equal(t, " ✗ Test", ui.StripColors(ui.Error("Test")))
@@ -88,30 +89,57 @@ func TestFormattersSanitizeInput(t *testing.T) {
 	}
 }
 
-func TestHeaderBoxRendering(t *testing.T) {
-	result := ui.Header("Test Header")
+func TestHeaderWithDescription(t *testing.T) {
+	result := ui.Header("Test Header", "A short description")
 	stripped := ui.StripColors(result)
+
+	// Should contain ▶ prefix and text
+	assert.Contains(t, stripped, "▶ Test Header", "Header should use ▶ prefix")
+
+	// Should contain description line indented
+	assert.Contains(t, stripped, "  A short description", "Header should show indented description")
+
+	// Should NOT contain any box drawing characters
+	assert.NotContains(t, stripped, "╔", "Header should not contain box characters")
+	assert.NotContains(t, stripped, "═", "Header should not contain box characters")
+	assert.NotContains(t, stripped, "╗", "Header should not contain box characters")
+	assert.NotContains(t, stripped, "║", "Header should not contain box characters")
+	assert.NotContains(t, stripped, "╚", "Header should not contain box characters")
+	assert.NotContains(t, stripped, "╝", "Header should not contain box characters")
+}
+
+func TestHeaderWithoutDescription(t *testing.T) {
+	result := ui.Header("Test Header", "")
+	stripped := ui.StripColors(result)
+
+	// Should contain ▶ prefix and text
+	assert.Contains(t, stripped, "▶ Test Header", "Header should use ▶ prefix")
+
+	// Should NOT contain any box drawing characters
+	assert.NotContains(t, stripped, "╔")
+	assert.NotContains(t, stripped, "║")
+	assert.NotContains(t, stripped, "╝")
+
+	// Count lines in trimmed output — should be only the title line
 	lines := strings.Split(strings.TrimSpace(stripped), "\n")
+	assert.Equal(t, 1, len(lines), "Header without description should have only title line")
+}
 
-	// Should have: top border, empty line, text line, empty line, bottom border
-	assert.GreaterOrEqual(t, len(lines), 5, "Header should have at least 5 lines")
+func TestHeaderTruncatesLongDescription(t *testing.T) {
+	longDesc := strings.Repeat("a", 100) // longer than SeparatorWidth - 2
+	result := ui.Header("Title", longDesc)
+	stripped := ui.StripColors(result)
 
-	// Verify box characters are present
-	assert.Contains(t, lines[0], "╔", "First line should contain top-left corner")
-	assert.Contains(t, lines[0], "╗", "First line should contain top-right corner")
-	assert.Contains(t, lines[len(lines)-1], "╚", "Last line should contain bottom-left corner")
-	assert.Contains(t, lines[len(lines)-1], "╝", "Last line should contain bottom-right corner")
+	lines := strings.Split(strings.TrimSpace(stripped), "\n")
+	require.GreaterOrEqual(t, len(lines), 2, "Should have title and description lines")
 
-	// Verify text is present in the middle section
-	textFound := false
-	for _, line := range lines {
-		if strings.Contains(line, "Test Header") {
-			textFound = true
-			assert.Contains(t, line, "║", "Text line should contain box borders")
-			break
-		}
-	}
-	assert.True(t, textFound, "Header text should be present in output")
+	// Description line (second line) should be truncated with …
+	descLine := lines[1]
+	assert.Contains(t, descLine, "…", "Long description should be truncated with …")
+	// The description content (after indent) should be at most SeparatorWidth - 2 runes
+	trimmedDesc := strings.TrimSpace(descLine)
+	assert.LessOrEqual(t, utf8.RuneCountInString(trimmedDesc), ui.SeparatorWidth-2,
+		"Truncated description should fit within SeparatorWidth-2")
 }
 
 func TestStepNumbering(t *testing.T) {
@@ -215,7 +243,7 @@ func TestInterruptedWithContext(t *testing.T) {
 }
 
 func TestHeaderSpacing(t *testing.T) {
-	result := ui.Header("Test")
+	result := ui.Header("Test", "")
 	stripped := ui.StripColors(result)
 
 	// Header should have SpaceMD before (3 newlines) and SpaceXS after (1 newline)

@@ -248,7 +248,26 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 	if taskLabel == "" {
 		taskLabel = "next task"
 	}
-	fmt.Fprint(r.output, ui.Header(fmt.Sprintf("Implementing %s", taskLabel)))
+	// Generate a one-line task description via fast model (best-effort).
+	var description string
+	if workflowState.CurrentTaskFile != "" {
+		taskFilePath := filepath.Join(r.config.TasksDir, workflowState.CurrentTaskFile)
+		if content, err := os.ReadFile(taskFilePath); err == nil {
+			// Truncate to first 2000 bytes to avoid sending large files to LLM.
+			taskContent := string(content)
+			if len(taskContent) > 2000 {
+				taskContent = taskContent[:2000]
+			}
+			if prompt, err := prompts.TaskSummary(prompts.TaskSummaryData{TaskContent: taskContent}); err == nil {
+				var buf strings.Builder
+				if err := r.stepRunner.executor.Run(ctx, &buf, model.Fast, prompt); err == nil {
+					description = ui.StripColors(strings.TrimSpace(buf.String()))
+				}
+			}
+		}
+	}
+
+	fmt.Fprint(r.output, ui.Header(fmt.Sprintf("Implementing %s", taskLabel), description))
 
 	// Build the Step 1 prompt based on whether a specific task is targeted.
 	implementData := prompts.ImplementData{

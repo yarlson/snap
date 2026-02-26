@@ -199,6 +199,18 @@ func TestUpdateDocs(t *testing.T) {
 	assert.Equal(t, strings.TrimSpace(result), result)
 }
 
+func TestTaskSummary(t *testing.T) {
+	data := prompts.TaskSummaryData{
+		TaskContent: "# TASK1: Redesign Task Banner\n\nReplace the bordered header with a borderless banner.",
+	}
+	result, err := prompts.TaskSummary(data)
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, result)
+	assert.Contains(t, result, "# TASK1: Redesign Task Banner")
+	assert.Equal(t, strings.TrimSpace(result), result)
+}
+
 func TestMemoryUpdate(t *testing.T) {
 	result := prompts.MemoryUpdate()
 

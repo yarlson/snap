@@ -31,6 +31,9 @@ var commit string
 //go:embed memory_update.md
 var memoryUpdate string
 
+//go:embed task_summary.md
+var taskSummaryTmpl string
+
 // ImplementData holds template parameters for the implement prompt.
 type ImplementData struct {
 	PRDPath  string
@@ -87,3 +90,21 @@ func Commit() string { return strings.TrimSpace(commit) }
 
 // MemoryUpdate returns the full embedded memory vault update prompt.
 func MemoryUpdate() string { return strings.TrimSpace(memoryUpdate) }
+
+// TaskSummaryData holds template parameters for the task-summary prompt.
+type TaskSummaryData struct {
+	TaskContent string
+}
+
+// TaskSummary renders the task-summary prompt template with the given data.
+func TaskSummary(data TaskSummaryData) (string, error) {
+	tmpl, err := template.New("task_summary").Parse(taskSummaryTmpl)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(buf.String()), nil
+}

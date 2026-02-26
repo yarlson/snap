@@ -45,8 +45,9 @@ func TestRunner_StateManagement(t *testing.T) {
 		mockExec := &MockExecutor{
 			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
 				stepCount++
-				// Fail after step 3 to simulate interruption
-				if stepCount == 3 {
+				// Fail after step 3 to simulate interruption.
+				// stepCount 1 = description generation (pre-step), 2-4 = steps 1-3.
+				if stepCount == 4 {
 					return errors.New("simulated failure")
 				}
 				return nil
@@ -172,11 +173,14 @@ func TestRunner_ImplementStepPromptIncludesOptionalContextDocs(t *testing.T) {
 		t.Fatalf("failed to create task file: %v", err)
 	}
 
-	var firstPrompt string
+	callCount := 0
+	var implementPrompt string
 	mockExec := &MockExecutor{
 		runFunc: func(_ context.Context, _ io.Writer, _ model.Type, args ...string) error {
-			if firstPrompt == "" && len(args) > 0 {
-				firstPrompt = args[len(args)-1]
+			callCount++
+			// Call 1 = description generation (pre-step); call 2 = step 1 (implement).
+			if callCount == 2 && len(args) > 0 {
+				implementPrompt = args[len(args)-1]
 			}
 			return errors.New("stop after first step")
 		},
@@ -190,8 +194,8 @@ func TestRunner_ImplementStepPromptIncludesOptionalContextDocs(t *testing.T) {
 
 	err := runner.Run(context.Background())
 	assert.Error(t, err)
-	assert.NotEmpty(t, firstPrompt)
-	assert.Contains(t, firstPrompt, "If TECHNOLOGY.md exists")
+	assert.NotEmpty(t, implementPrompt)
+	assert.Contains(t, implementPrompt, "If TECHNOLOGY.md exists")
 }
 
 func TestRunner_IdleTaskSelection(t *testing.T) {
@@ -207,11 +211,14 @@ func TestRunner_IdleTaskSelection(t *testing.T) {
 		//nolint:errcheck // cleanup
 		_ = stateManager.Reset()
 
-		var firstPrompt string
+		callCount := 0
+		var implementPrompt string
 		mockExec := &MockExecutor{
 			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, args ...string) error {
-				if firstPrompt == "" && len(args) > 0 {
-					firstPrompt = args[len(args)-1]
+				callCount++
+				// Call 1 = description generation; call 2 = step 1 (implement).
+				if callCount == 2 && len(args) > 0 {
+					implementPrompt = args[len(args)-1]
 				}
 				return errors.New("stop")
 			},
@@ -226,8 +233,8 @@ func TestRunner_IdleTaskSelection(t *testing.T) {
 		assert.Error(t, err)
 
 		// Step 1 prompt should reference the specific task file.
-		assert.Contains(t, firstPrompt, "TASK1.md")
-		assert.Contains(t, firstPrompt, "TASK1")
+		assert.Contains(t, implementPrompt, "TASK1.md")
+		assert.Contains(t, implementPrompt, "TASK1")
 
 		// State should have the active task set.
 		loaded, err := stateManager.Load()
@@ -254,11 +261,14 @@ func TestRunner_IdleTaskSelection(t *testing.T) {
 		seedState.CompletedTaskIDs = []string{"TASK1"}
 		assert.NoError(t, stateManager.Save(seedState))
 
-		var firstPrompt string
+		callCount := 0
+		var implementPrompt string
 		mockExec := &MockExecutor{
 			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, args ...string) error {
-				if firstPrompt == "" && len(args) > 0 {
-					firstPrompt = args[len(args)-1]
+				callCount++
+				// Call 1 = description generation; call 2 = step 1 (implement).
+				if callCount == 2 && len(args) > 0 {
+					implementPrompt = args[len(args)-1]
 				}
 				return errors.New("stop")
 			},
@@ -273,8 +283,8 @@ func TestRunner_IdleTaskSelection(t *testing.T) {
 		assert.Error(t, err)
 
 		// Should select TASK2, not TASK1.
-		assert.Contains(t, firstPrompt, "TASK2.md")
-		assert.Contains(t, firstPrompt, "TASK2")
+		assert.Contains(t, implementPrompt, "TASK2.md")
+		assert.Contains(t, implementPrompt, "TASK2")
 	})
 
 	t.Run("errors when no task files found", func(t *testing.T) {
@@ -353,7 +363,8 @@ func TestRunner_IdleTaskSelection(t *testing.T) {
 			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
 				stepCount++
 				// Let first iteration's steps succeed, then fail on second iteration.
-				if stepCount > 10 {
+				// Each iteration has 1 description call + 10 workflow steps = 11 calls.
+				if stepCount > 11 {
 					return errors.New("stop after first iteration")
 				}
 				return nil
@@ -442,12 +453,8 @@ func TestRunner_ResumeExactTaskAndStep(t *testing.T) {
 		seedState.CurrentStep = 3
 		require.NoError(t, stateManager.Save(seedState))
 
-		var firstPrompt string
 		mockExec := &MockExecutor{
-			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, args ...string) error {
-				if firstPrompt == "" && len(args) > 0 {
-					firstPrompt = args[len(args)-1]
-				}
+			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
 				return errors.New("stop")
 			},
 		}
@@ -613,51 +620,54 @@ func TestRunner_EmbeddedPrompts(t *testing.T) {
 
 	err := runner.Run(context.Background())
 	assert.NoError(t, err)
-	require.Len(t, capturedPrompts, 10, "workflow should execute exactly 10 steps")
+	require.Len(t, capturedPrompts, 11, "workflow should execute 1 description call + 10 steps")
+
+	// Prompt 0: Task description generation (pre-step)
+	assert.Contains(t, capturedPrompts[0], "Summarize")
 
 	// Step 1: Implement — contains PRD path, task reference, and quality guardrails
-	assert.Contains(t, capturedPrompts[0], prdPath)
-	assert.Contains(t, capturedPrompts[0], "TASK1")
-	assert.Contains(t, capturedPrompts[0], "memory-map.md")
-	assert.Contains(t, capturedPrompts[0], "Quality Guardrails")
-	assert.Contains(t, capturedPrompts[0], "parameterized queries")
+	assert.Contains(t, capturedPrompts[1], prdPath)
+	assert.Contains(t, capturedPrompts[1], "TASK1")
+	assert.Contains(t, capturedPrompts[1], "memory-map.md")
+	assert.Contains(t, capturedPrompts[1], "Quality Guardrails")
+	assert.Contains(t, capturedPrompts[1], "parameterized queries")
 
 	// Step 2: Ensure completeness
-	assert.Contains(t, capturedPrompts[1], "fully implemented")
+	assert.Contains(t, capturedPrompts[2], "fully implemented")
 
 	// Step 3: Lint & test
-	assert.Contains(t, capturedPrompts[2], "AGENTS.md")
-	assert.Contains(t, capturedPrompts[2], "linters")
+	assert.Contains(t, capturedPrompts[3], "AGENTS.md")
+	assert.Contains(t, capturedPrompts[3], "linters")
 
 	// Step 4: Code review — full embedded skill with context loading, not delegation
-	assert.Contains(t, capturedPrompts[3], "CLAUDE.md")
-	assert.Contains(t, capturedPrompts[3], "git diff HEAD")
-	assert.Contains(t, capturedPrompts[3], "CRITICAL")
-	assert.NotContains(t, capturedPrompts[3], "Use the code-review skill")
+	assert.Contains(t, capturedPrompts[4], "CLAUDE.md")
+	assert.Contains(t, capturedPrompts[4], "git diff HEAD")
+	assert.Contains(t, capturedPrompts[4], "CRITICAL")
+	assert.NotContains(t, capturedPrompts[4], "Use the code-review skill")
 
 	// Step 5: Apply fixes
-	assert.Contains(t, capturedPrompts[4], "Fix")
-	assert.Contains(t, capturedPrompts[4], "issues")
+	assert.Contains(t, capturedPrompts[5], "Fix")
+	assert.Contains(t, capturedPrompts[5], "issues")
 
 	// Step 6: Verify fixes (same as step 3)
-	assert.Contains(t, capturedPrompts[5], "AGENTS.md")
+	assert.Contains(t, capturedPrompts[6], "AGENTS.md")
 
 	// Step 7: Update docs — diff-based documentation update
-	assert.Contains(t, capturedPrompts[6], "git diff HEAD")
-	assert.Contains(t, capturedPrompts[6], "README.md")
-	assert.Contains(t, capturedPrompts[6], "user-facing")
+	assert.Contains(t, capturedPrompts[7], "git diff HEAD")
+	assert.Contains(t, capturedPrompts[7], "README.md")
+	assert.Contains(t, capturedPrompts[7], "user-facing")
 
 	// Step 8: Commit code
-	assert.Contains(t, capturedPrompts[7], "conventional commit")
-	assert.Contains(t, capturedPrompts[7], "co-author")
+	assert.Contains(t, capturedPrompts[8], "conventional commit")
+	assert.Contains(t, capturedPrompts[8], "co-author")
 
 	// Step 9: Memory update — full embedded skill, not delegation
-	assert.Contains(t, capturedPrompts[8], ".memory/")
-	assert.Contains(t, capturedPrompts[8], "summary.md")
-	assert.NotContains(t, capturedPrompts[8], "Update the memory vault.")
+	assert.Contains(t, capturedPrompts[9], ".memory/")
+	assert.Contains(t, capturedPrompts[9], "summary.md")
+	assert.NotContains(t, capturedPrompts[9], "Update the memory vault.")
 
 	// Step 10: Commit memory (same as step 8)
-	assert.Contains(t, capturedPrompts[9], "conventional commit")
+	assert.Contains(t, capturedPrompts[10], "conventional commit")
 }
 
 func TestRunner_CompletionDeduplication(t *testing.T) {
@@ -725,7 +735,9 @@ func TestRunner_CompletionDeduplication(t *testing.T) {
 		mockExec := &MockExecutor{
 			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
 				stepCount++
-				if stepCount > 9 {
+				// 1 desc + 2 workflow steps (9,10) = 3 calls for first iteration.
+				// Fail early in second iteration to stop.
+				if stepCount > 10 {
 					return errors.New("stop")
 				}
 				return nil
@@ -790,11 +802,54 @@ func TestRunner_UpdateDocsStepConfig(t *testing.T) {
 
 	err := runner.Run(context.Background())
 	assert.NoError(t, err)
-	require.Len(t, captured, 10)
+	require.Len(t, captured, 11, "1 description call + 10 workflow steps")
 
-	// Step 7 (index 6): "Update docs" must use Fast model and include no-commit suffix.
-	assert.Equal(t, model.Fast, captured[6].model, "Update docs step should use Fast model")
-	assert.Contains(t, captured[6].prompt, "Do not stage, commit, amend, rebase, or push", "Update docs step should include no-commit suffix")
+	// Step 7 (index 7, offset by 1 for description call): "Update docs" must use Fast model and include no-commit suffix.
+	assert.Equal(t, model.Fast, captured[7].model, "Update docs step should use Fast model")
+	assert.Contains(t, captured[7].prompt, "Do not stage, commit, amend, rebase, or push", "Update docs step should include no-commit suffix")
+}
+
+func TestRunner_DescriptionFailureIsGraceful(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	prdPath := filepath.Join(tmpDir, "PRD.md")
+	require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+	stateManager := state.NewManagerWithDir(tmpDir)
+	//nolint:errcheck // cleanup
+	_ = stateManager.Reset()
+
+	var buf bytes.Buffer
+	callCount := 0
+	mockExec := &MockExecutor{
+		runFunc: func(_ context.Context, _ io.Writer, mt model.Type, _ ...string) error {
+			callCount++
+			// Call 1 = description generation (Fast model) — fail it.
+			if callCount == 1 {
+				assert.Equal(t, model.Fast, mt, "description call should use Fast model")
+				return errors.New("LLM unavailable")
+			}
+			return nil
+		},
+	}
+
+	runner := workflow.NewRunner(mockExec, workflow.Config{
+		TasksDir: tmpDir,
+		PRDPath:  prdPath,
+	}, workflow.WithStateManager(stateManager), workflow.WithRunnerOutput(&buf))
+
+	err := runner.Run(context.Background())
+	assert.NoError(t, err, "workflow should complete despite description generation failure")
+
+	output := buf.String()
+	stripped := ui.StripColors(output)
+
+	// Header should still appear with task label but no description line.
+	assert.Contains(t, stripped, "▶ Implementing TASK1", "header should be printed")
+	// All 10 steps should execute (callCount = 1 desc + 10 steps = 11).
+	assert.Equal(t, 11, callCount, "all 10 workflow steps should execute after description failure")
+	assert.Contains(t, output, "Iteration complete", "iteration should finish")
 }
 
 func TestRunner_SnapshotErrorsAreNonFatal(t *testing.T) {
