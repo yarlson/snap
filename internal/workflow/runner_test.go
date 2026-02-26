@@ -631,7 +631,7 @@ func TestRunner_EmbeddedPrompts(t *testing.T) {
 
 	// Step 4: Code review — full embedded skill with context loading, not delegation
 	assert.Contains(t, capturedPrompts[3], "CLAUDE.md")
-	assert.Contains(t, capturedPrompts[3], "merge-base")
+	assert.Contains(t, capturedPrompts[3], "git diff HEAD")
 	assert.Contains(t, capturedPrompts[3], "CRITICAL")
 	assert.NotContains(t, capturedPrompts[3], "Use the code-review skill")
 
@@ -643,7 +643,7 @@ func TestRunner_EmbeddedPrompts(t *testing.T) {
 	assert.Contains(t, capturedPrompts[5], "AGENTS.md")
 
 	// Step 7: Update docs — diff-based documentation update
-	assert.Contains(t, capturedPrompts[6], "merge-base")
+	assert.Contains(t, capturedPrompts[6], "git diff HEAD")
 	assert.Contains(t, capturedPrompts[6], "README.md")
 	assert.Contains(t, capturedPrompts[6], "user-facing")
 

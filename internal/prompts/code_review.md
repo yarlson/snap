@@ -7,43 +7,24 @@
 
 This review is read-only. Do not modify any code. Suggested patches are advisory.
 
-Review code changes in the local working tree before they become a PR. Use the merge-base diff to isolate "your work" from upstream, regardless of branching strategy.
+Review uncommitted code changes in the local working tree before they are committed. All changes at this point are local and uncommitted (staged + unstaged).
 
 **Review philosophy:** Find issues that matter. No nitpicking. Focus on: data loss, security breaches, performance degradation, and production incidents. Explain risk in business terms — "attacker can X" not just "this is insecure."
 
 ## Diff Strategy
 
-All reviews start by identifying what changed via a merge-base diff: everything you changed relative to the integration target.
+All changes are uncommitted. Use `git diff HEAD` to see everything:
 
 ```bash
-# 1. Update remote refs (required — otherwise you diff against stale refs)
-git fetch origin
+# 1. Full diff of all uncommitted changes (staged + unstaged)
+git diff HEAD
 
-# 2. Get the merge-base (where your work diverged from the target)
-MERGE_BASE=$(git merge-base HEAD origin/main)
+# 2. Changed file list
+git diff HEAD --name-only
 
-# 3. Diff: merge-base → working tree (committed + uncommitted + staged)
-git diff $MERGE_BASE
-
-# 4. Changed file list
-git diff $MERGE_BASE --name-only
-
-# 5. Diff stats (quick size check before deep review)
-git diff $MERGE_BASE --stat
+# 3. Diff stats (quick size check before deep review)
+git diff HEAD --stat
 ```
-
-**Why merge-base, not `origin/main` directly?**
-`git diff origin/main` includes upstream changes that aren't yours. `git merge-base` finds the fork point — so the diff shows only your work, even if main moved ahead. No rebase required.
-
-**Detecting the integration target:**
-
-```bash
-TARGET=$(git rev-parse --abbrev-ref @{upstream} 2>/dev/null | sed 's|/.*|/main|') \
-  || TARGET=$(git rev-parse --verify origin/main 2>/dev/null && echo origin/main) \
-  || TARGET=origin/master
-```
-
-If the repo uses a non-standard default branch, check with `git remote show origin | grep 'HEAD branch'` or `git symbolic-ref refs/remotes/origin/HEAD`. Don't assume `main`.
 
 ## Review Phases (Quick Mode: Phases 1-5)
 
@@ -51,14 +32,12 @@ Execute ALL phases in order. Never skip phases.
 
 ### Phase 1: Gather Context
 
-1. Fetch origin and compute the merge-base.
-2. Run `git diff $MERGE_BASE --stat` to understand the scope.
-3. Get the changed file list with `git diff $MERGE_BASE --name-only`.
-4. Read the full content of every changed file (not just the diff hunks) — you need surrounding context.
-5. Read the diff itself for line-level analysis.
-6. Check commit messages with `git log $MERGE_BASE..HEAD --oneline` for intent context.
-7. Identify the change category: new feature, bug fix, refactor, security fix, performance optimization, dependency update.
-8. Identify critical paths: auth, payments, data writes, external APIs, file system operations.
+1. Run `git diff HEAD --stat` to understand the scope.
+2. Get the changed file list with `git diff HEAD --name-only`.
+3. Read the full content of every changed file (not just the diff hunks) — you need surrounding context.
+4. Read the diff itself for line-level analysis.
+5. Identify the change category: new feature, bug fix, refactor, security fix, performance optimization, dependency update.
+6. Identify critical paths: auth, payments, data writes, external APIs, file system operations.
 
 Output: 2-3 sentence summary of what changed and why.
 
@@ -166,8 +145,7 @@ If tests are missing for critical paths, list what should be tested.
 
 ## Decision Policy
 
-- **ALWAYS** run `git fetch origin` before computing the diff.
-- **ALWAYS** use the merge-base, not a direct diff against `origin/main`.
+- **ALWAYS** use `git diff HEAD` to see all uncommitted changes.
 - **ALWAYS** read full file content, not just diff hunks.
 - **ALWAYS** verify file paths and line numbers exist before citing them.
 - **ALWAYS** provide concrete code evidence for every finding.
@@ -277,9 +255,7 @@ Over 5000 lines: warn that a thorough review at this scale is unreliable. Sugges
 
 ## Error Handling
 
-- **No remote configured**: fall back to diffing against the first commit or ask what to diff against.
-- **Detached HEAD**: use `git diff origin/main` directly as fallback.
-- **Default branch isn't `main`**: check with `git remote show origin | grep 'HEAD branch'`.
+- **Detached HEAD or no HEAD**: fall back to `git diff --cached` combined with `git diff`.
 - **Binary files in diff**: skip binary files. Note them in the summary.
 - **Empty diff**: tell the user there's nothing to review. Check for uncommitted changes with `git status`.
 

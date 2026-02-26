@@ -147,7 +147,7 @@ func TestCodeReview(t *testing.T) {
 	assert.Contains(t, result, "read-only")
 
 	// Key review markers
-	assert.Contains(t, result, "merge-base")
+	assert.Contains(t, result, "git diff HEAD")
 	assert.Contains(t, result, "Security Scan")
 	assert.Contains(t, result, "CRITICAL")
 	assert.Contains(t, result, "BLOCK")
@@ -190,7 +190,7 @@ func TestUpdateDocs(t *testing.T) {
 	assert.Contains(t, result, ".memory/")
 
 	// Core behavior: diff-based doc update
-	assert.Contains(t, result, "merge-base")
+	assert.Contains(t, result, "git diff HEAD")
 	assert.Contains(t, result, "README.md")
 	assert.Contains(t, result, "user-facing")
 

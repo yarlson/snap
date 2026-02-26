@@ -7,7 +7,7 @@ Review the changes made in this task and update user-facing documentation if beh
 
 ## Process
 
-1. Run `git diff $(git merge-base HEAD origin/main)` to see what changed
+1. Run `git diff HEAD` to see all uncommitted changes (staged + unstaged)
 2. Read README.md and any other user-facing docs (CLI help text, usage examples, API docs)
 3. Determine if changes affect user-facing behavior:
    - New or changed CLI flags, subcommands, or arguments
