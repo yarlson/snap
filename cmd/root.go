@@ -52,7 +52,7 @@ func init() {
 	rootCmd.Version = Version
 	rootCmd.SetVersionTemplate("snap {{.Version}}\n")
 
-	rootCmd.Flags().StringVarP(&tasksDir, "tasks-dir", "d", "docs/tasks", "Directory containing PRD and task files")
+	rootCmd.PersistentFlags().StringVarP(&tasksDir, "tasks-dir", "d", "docs/tasks", "Directory containing PRD and task files")
 	rootCmd.Flags().StringVarP(&prdPath, "prd", "p", "", "Path to PRD file (default: <tasks-dir>/PRD.md)")
 	rootCmd.Flags().BoolVar(&freshStart, "fresh", false, "Force fresh start, ignore existing state")
 	rootCmd.Flags().BoolVar(&showState, "show-state", false, "Show current state and exit")

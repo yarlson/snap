@@ -37,13 +37,15 @@ go build -o snap .
 
 ## Quickstart
 
-1. Create your tasks directory:
+1. Initialize your snap project:
 
 ```bash
-mkdir -p docs/tasks
+snap init
 ```
 
-2. Write your PRD (`docs/tasks/PRD.md`):
+This scaffolds your project with template PRD and task files in `docs/tasks/`.
+
+2. Edit your PRD (`docs/tasks/PRD.md`):
 
 ```markdown
 # My Feature Set
@@ -51,7 +53,7 @@ mkdir -p docs/tasks
 Overview of what you're building.
 ```
 
-3. Create your first task file (`docs/tasks/TASK1.md`):
+3. Edit your first task file (`docs/tasks/TASK1.md`):
 
 ```markdown
 # TASK1: User authentication
@@ -85,27 +87,56 @@ See `example/` for a complete working example.
 
 ## Usage
 
+### Main command
+
 ```bash
 snap [flags]
 ```
 
+Runs the task-by-task implementation workflow. By default, reads tasks from `docs/tasks/` and implements each task until stopped.
+
+### Init subcommand
+
+```bash
+snap init [flags]
+```
+
+Scaffolds a new snap project with template PRD and task files. Safe to run multiple times—existing files are not overwritten. Creates:
+- `docs/tasks/PRD.md` (product requirements template)
+- `docs/tasks/TASK1.md` (first task template)
+
+Common usage:
+```bash
+# Initialize project in default location (docs/tasks)
+snap init
+
+# Initialize in custom directory
+snap init --tasks-dir ./features
+```
+
 ### Flags
 
-| Flag           | Short | Default              | Description                                 |
-| -------------- | ----- | -------------------- | ------------------------------------------- |
-| `--version`    |       |                      | Show version and exit                       |
-| `--tasks-dir`  | `-d`  | `docs/tasks`         | Directory containing PRD and task files     |
-| `--prd`        | `-p`  | `<tasks-dir>/PRD.md` | Path to PRD file                            |
-| `--fresh`      |       | `false`              | Ignore saved state and start fresh          |
-| `--show-state` |       | `false`              | Display current workflow state and exit     |
+| Flag           | Short | Default              | Description                                            |
+| -------------- | ----- | -------------------- | ------------------------------------------------------ |
+| `--version`    |       |                      | Show version and exit                                  |
+| `--tasks-dir`  | `-d`  | `docs/tasks`         | Directory containing PRD and task files (persistent)   |
+| `--prd`        | `-p`  | `<tasks-dir>/PRD.md` | Path to PRD file                                       |
+| `--fresh`      |       | `false`              | Ignore saved state and start fresh                     |
+| `--show-state` |       | `false`              | Display current workflow state and exit                |
 
 ### Examples
 
 ```bash
-# Default: reads docs/tasks/PRD.md
+# Initialize a new project with templates
+snap init
+
+# Initialize in custom directory
+snap init -d ./features
+
+# Run implementation workflow (default: docs/tasks)
 snap
 
-# Custom tasks directory
+# Run with custom tasks directory
 snap --tasks-dir ./features
 
 # Custom PRD path
