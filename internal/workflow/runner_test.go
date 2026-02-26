@@ -968,3 +968,234 @@ func TestRunner_SnapshotsCreatedDuringIteration(t *testing.T) {
 	output := buf.String()
 	assert.Contains(t, output, "snapshot saved")
 }
+
+func TestRunner_StartupSummary(t *testing.T) {
+	t.Run("fresh start shows summary with task counts and provider", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		prdPath := filepath.Join(tmpDir, "PRD.md")
+		require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK2.md"), []byte("# Task 2"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK3.md"), []byte("# Task 3"), 0o600))
+
+		// Pre-seed state with TASK1 completed.
+		stateManager := state.NewManagerWithDir(tmpDir)
+		//nolint:errcheck // cleanup
+		_ = stateManager.Reset()
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
+		seedState.CompletedTaskIDs = []string{"TASK1"}
+		require.NoError(t, stateManager.Save(seedState))
+
+		var buf bytes.Buffer
+		mockExec := &MockExecutor{
+			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+				return errors.New("stop")
+			},
+		}
+
+		runner := workflow.NewRunner(mockExec, workflow.Config{
+			TasksDir:     tmpDir,
+			PRDPath:      prdPath,
+			ProviderName: "claude",
+		}, workflow.WithStateManager(stateManager), workflow.WithRunnerOutput(&buf))
+
+		//nolint:errcheck // testing output, not error
+		_ = runner.Run(context.Background())
+
+		output := buf.String()
+		stripped := ui.StripColors(output)
+
+		// Verify summary contains expected components.
+		assert.Contains(t, stripped, "3 tasks (1 done)", "summary should show task count and done count")
+		assert.Contains(t, stripped, "claude", "summary should show provider name")
+		assert.Contains(t, stripped, tmpDir, "summary should show tasks directory")
+		assert.Contains(t, stripped, "starting TASK2", "summary should show action")
+	})
+
+	t.Run("summary appears before first step header", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		prdPath := filepath.Join(tmpDir, "PRD.md")
+		require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+		stateManager := state.NewManagerWithDir(tmpDir)
+		//nolint:errcheck // cleanup
+		_ = stateManager.Reset()
+
+		var buf bytes.Buffer
+		mockExec := &MockExecutor{
+			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+				return errors.New("stop")
+			},
+		}
+
+		runner := workflow.NewRunner(mockExec, workflow.Config{
+			TasksDir:     tmpDir,
+			PRDPath:      prdPath,
+			ProviderName: "claude",
+		}, workflow.WithStateManager(stateManager), workflow.WithRunnerOutput(&buf))
+
+		//nolint:errcheck // testing output, not error
+		_ = runner.Run(context.Background())
+
+		stripped := ui.StripColors(buf.String())
+
+		summaryIdx := strings.Index(stripped, "snap:")
+		stepIdx := strings.Index(stripped, "▶ Step")
+		headerIdx := strings.Index(stripped, "▶ Implementing")
+
+		require.NotEqual(t, -1, summaryIdx, "output should contain startup summary")
+
+		if stepIdx != -1 {
+			assert.Less(t, summaryIdx, stepIdx, "summary should appear before first step")
+		}
+		if headerIdx != -1 {
+			assert.Less(t, summaryIdx, headerIdx, "summary should appear before header")
+		}
+	})
+
+	t.Run("prompt hint appears on fresh start with IsTTY", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		prdPath := filepath.Join(tmpDir, "PRD.md")
+		require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+		stateManager := state.NewManagerWithDir(tmpDir)
+		//nolint:errcheck // cleanup
+		_ = stateManager.Reset()
+
+		var buf bytes.Buffer
+		mockExec := &MockExecutor{
+			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+				return errors.New("stop")
+			},
+		}
+
+		runner := workflow.NewRunner(mockExec, workflow.Config{
+			TasksDir:     tmpDir,
+			PRDPath:      prdPath,
+			ProviderName: "claude",
+			IsTTY:        true,
+		}, workflow.WithStateManager(stateManager), workflow.WithRunnerOutput(&buf))
+
+		//nolint:errcheck // testing output, not error
+		_ = runner.Run(context.Background())
+
+		stripped := ui.StripColors(buf.String())
+		assert.Contains(t, stripped, "Type a directive and press Enter to queue it between steps",
+			"prompt hint should appear on fresh start with TTY")
+	})
+
+	t.Run("prompt hint does NOT appear on resume", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		prdPath := filepath.Join(tmpDir, "PRD.md")
+		require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+		// Pre-seed state: TASK1 active at step 3 (resume scenario).
+		stateManager := state.NewManagerWithDir(tmpDir)
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
+		seedState.CurrentTaskID = "TASK1"
+		seedState.CurrentTaskFile = "TASK1.md"
+		seedState.CurrentStep = 3
+		require.NoError(t, stateManager.Save(seedState))
+
+		var buf bytes.Buffer
+		mockExec := &MockExecutor{
+			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+				return errors.New("stop")
+			},
+		}
+
+		runner := workflow.NewRunner(mockExec, workflow.Config{
+			TasksDir:     tmpDir,
+			PRDPath:      prdPath,
+			ProviderName: "claude",
+			IsTTY:        true,
+		}, workflow.WithStateManager(stateManager), workflow.WithRunnerOutput(&buf))
+
+		//nolint:errcheck // testing output, not error
+		_ = runner.Run(context.Background())
+
+		stripped := ui.StripColors(buf.String())
+		assert.NotContains(t, stripped, "Type a directive",
+			"prompt hint should NOT appear on resume")
+	})
+
+	t.Run("prompt hint suppressed without IsTTY", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		prdPath := filepath.Join(tmpDir, "PRD.md")
+		require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+		stateManager := state.NewManagerWithDir(tmpDir)
+		//nolint:errcheck // cleanup
+		_ = stateManager.Reset()
+
+		var buf bytes.Buffer
+		mockExec := &MockExecutor{
+			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+				return errors.New("stop")
+			},
+		}
+
+		runner := workflow.NewRunner(mockExec, workflow.Config{
+			TasksDir:     tmpDir,
+			PRDPath:      prdPath,
+			ProviderName: "claude",
+			IsTTY:        false,
+		}, workflow.WithStateManager(stateManager), workflow.WithRunnerOutput(&buf))
+
+		//nolint:errcheck // testing output, not error
+		_ = runner.Run(context.Background())
+
+		stripped := ui.StripColors(buf.String())
+		assert.NotContains(t, stripped, "Type a directive",
+			"prompt hint should NOT appear when not TTY")
+	})
+
+	t.Run("resume shows summary with resuming action", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		prdPath := filepath.Join(tmpDir, "PRD.md")
+		require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK2.md"), []byte("# Task 2"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK3.md"), []byte("# Task 3"), 0o600))
+
+		// Pre-seed state: TASK2 active at step 5.
+		stateManager := state.NewManagerWithDir(tmpDir)
+		seedState := state.NewState(tmpDir, prdPath, workflow.StepCount())
+		seedState.CurrentTaskID = "TASK2"
+		seedState.CurrentTaskFile = "TASK2.md"
+		seedState.CurrentStep = 5
+		seedState.CompletedTaskIDs = []string{"TASK1"}
+		require.NoError(t, stateManager.Save(seedState))
+
+		var buf bytes.Buffer
+		mockExec := &MockExecutor{
+			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+				return errors.New("stop")
+			},
+		}
+
+		runner := workflow.NewRunner(mockExec, workflow.Config{
+			TasksDir:     tmpDir,
+			PRDPath:      prdPath,
+			ProviderName: "codex",
+		}, workflow.WithStateManager(stateManager), workflow.WithRunnerOutput(&buf))
+
+		//nolint:errcheck // testing output, not error
+		_ = runner.Run(context.Background())
+
+		stripped := ui.StripColors(buf.String())
+		assert.Contains(t, stripped, "3 tasks (1 done)", "summary should show task count and done count")
+		assert.Contains(t, stripped, "codex", "summary should show provider name")
+		assert.Contains(t, stripped, "resuming TASK2 from step 5", "summary should show resume action")
+	})
+}

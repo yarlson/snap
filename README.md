@@ -190,6 +190,15 @@ After step 10, snap starts the next task.
 
 While snap runs, type a directive and press Enter. Your prompt queues up and executes between steps.
 
+When starting in an interactive terminal, you'll see a hint:
+
+```
+snap: docs/tasks/ | claude | 3 tasks (1 done) | starting TASK2
+Type a directive and press Enter to queue it between steps
+```
+
+The startup summary shows your progress (tasks completed, current action), then the workflow begins:
+
 ```
 ▶ Step 3/10: Validate implementation
 > use table-driven tests instead of individual test functions
@@ -222,6 +231,14 @@ your-project/
 ## Resume from interruption
 
 snap saves state after every completed step in `.snap/state.json`. If interrupted (Ctrl+C, crash, system restart), run `snap` again - it resumes from the exact step where it stopped.
+
+On resume, you'll see a startup summary showing your position:
+
+```
+snap: docs/tasks/ | claude | 3 tasks (1 done) | resuming TASK2 from step 5
+```
+
+This confirms which task and step you're resuming from before the workflow continues.
 
 State is automatically cleaned up after each task completes.
 

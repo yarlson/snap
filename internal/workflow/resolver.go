@@ -18,6 +18,7 @@ type startupTarget struct {
 	taskID   string
 	taskFile string
 	step     int
+	tasks    []TaskInfo // Scanned tasks (populated on resume, available for caller use)
 }
 
 // resolveStartup determines whether to resume an active task or select a new one.
@@ -25,6 +26,8 @@ type startupTarget struct {
 // tasks directory and that the step is within bounds. When idle, it returns a select
 // target without scanning the filesystem.
 // Returns an error with recovery guidance for inconsistent state.
+// The returned target includes scanned tasks when resuming, which can be reused to
+// avoid redundant directory scans by the caller.
 func resolveStartup(workflowState *state.State, tasksDir string, totalSteps int) (*startupTarget, error) {
 	if workflowState == nil || workflowState.CurrentTaskID == "" {
 		return &startupTarget{action: actionSelect}, nil
@@ -80,5 +83,6 @@ func resolveStartup(workflowState *state.State, tasksDir string, totalSteps int)
 		taskID:   workflowState.CurrentTaskID,
 		taskFile: workflowState.CurrentTaskFile,
 		step:     workflowState.CurrentStep,
+		tasks:    tasks,
 	}, nil
 }

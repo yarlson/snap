@@ -390,3 +390,82 @@ func TestInterruptedWithContextSpacing(t *testing.T) {
 	assert.True(t, strings.HasPrefix(stripped, "\n\n"), "InterruptedWithContext should start with SpaceSM (2 newlines)")
 	assert.True(t, strings.HasSuffix(stripped, "\n\n"), "InterruptedWithContext should end with SpaceSM (2 newlines)")
 }
+
+func TestFormatStartupSummary(t *testing.T) {
+	tests := []struct {
+		name      string
+		tasksDir  string
+		provider  string
+		taskCount int
+		doneCount int
+		action    string
+		expected  string
+	}{
+		{
+			name:      "zero tasks zero done",
+			tasksDir:  "docs/tasks/",
+			provider:  "claude",
+			taskCount: 0,
+			doneCount: 0,
+			action:    "starting TASK1",
+			expected:  "snap: docs/tasks/ | claude | 0 tasks (0 done) | starting TASK1",
+		},
+		{
+			name:      "multiple tasks some done",
+			tasksDir:  "docs/tasks/",
+			provider:  "claude",
+			taskCount: 5,
+			doneCount: 3,
+			action:    "starting TASK4",
+			expected:  "snap: docs/tasks/ | claude | 5 tasks (3 done) | starting TASK4",
+		},
+		{
+			name:      "singular task",
+			tasksDir:  "docs/tasks/",
+			provider:  "codex",
+			taskCount: 1,
+			doneCount: 0,
+			action:    "starting TASK1",
+			expected:  "snap: docs/tasks/ | codex | 1 task (0 done) | starting TASK1",
+		},
+		{
+			name:      "resume action",
+			tasksDir:  "features/",
+			provider:  "claude",
+			taskCount: 3,
+			doneCount: 1,
+			action:    "resuming TASK2 from step 5",
+			expected:  "snap: features/ | claude | 3 tasks (1 done) | resuming TASK2 from step 5",
+		},
+		{
+			name:      "custom tasks directory",
+			tasksDir:  "my/tasks/",
+			provider:  "codex",
+			taskCount: 2,
+			doneCount: 2,
+			action:    "starting TASK3",
+			expected:  "snap: my/tasks/ | codex | 2 tasks (2 done) | starting TASK3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ui.FormatStartupSummary(tt.tasksDir, tt.provider, tt.taskCount, tt.doneCount, tt.action)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestFormatStartupSummaryContainsNoANSI(t *testing.T) {
+	result := ui.FormatStartupSummary("docs/tasks/", "claude", 3, 1, "starting TASK2")
+	// Summary line must contain no ANSI escape sequences.
+	assert.Equal(t, result, ui.StripColors(result), "startup summary must not contain ANSI codes")
+}
+
+func TestFormatStartupSummaryMatchesPRDSpec(t *testing.T) {
+	// Verify format matches PRD spec: snap: <dir> | <provider> | <count> | <action>
+	result := ui.FormatStartupSummary("docs/tasks/", "claude", 3, 1, "starting TASK2")
+	assert.True(t, strings.HasPrefix(result, "snap: "), "summary must start with 'snap: '")
+	parts := strings.Split(result, " | ")
+	assert.Equal(t, 4, len(parts), "summary must have 4 pipe-separated sections")
+}

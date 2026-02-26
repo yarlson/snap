@@ -97,13 +97,15 @@ func run(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	config := workflow.Config{
-		TasksDir:   tasksDir,
-		PRDPath:    prdPath,
-		FreshStart: freshStart,
-	}
-
 	isTTY := input.IsTerminal(os.Stdin)
+
+	config := workflow.Config{
+		TasksDir:     tasksDir,
+		PRDPath:      prdPath,
+		FreshStart:   freshStart,
+		ProviderName: providerName,
+		IsTTY:        isTTY,
+	}
 
 	// When running in a TTY, create a SwitchWriter for modal input support.
 	// All workflow output routes through the SwitchWriter so it can be paused

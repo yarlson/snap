@@ -30,9 +30,11 @@ func StepCount() int {
 
 // Config holds workflow configuration.
 type Config struct {
-	TasksDir   string
-	PRDPath    string
-	FreshStart bool // Force fresh start, ignore existing state
+	TasksDir     string
+	PRDPath      string
+	FreshStart   bool   // Force fresh start, ignore existing state
+	ProviderName string // Provider display name (e.g. "claude", "codex")
+	IsTTY        bool   // Whether stdout is a terminal
 }
 
 // StateManager defines the interface for state management, used in tests for dependency injection.
@@ -164,9 +166,10 @@ func (r *Runner) Run(ctx context.Context) error {
 		return fmt.Errorf("cannot resume: %w", err)
 	}
 
+	isResume := target.action == actionResume
+
 	switch target.action {
 	case actionResume:
-		fmt.Fprint(r.output, ui.Info(fmt.Sprintf("Resuming %s from step %d", target.taskID, target.step)))
 		if workflowState.LastError != "" {
 			fmt.Fprint(r.output, ui.Interrupted(fmt.Sprintf("Last error: %s", workflowState.LastError)))
 		}
@@ -178,6 +181,33 @@ func (r *Runner) Run(ctx context.Context) error {
 		if done {
 			return nil
 		}
+	}
+
+	// Print startup summary.
+	// For resume, reuse scanned tasks from resolveStartup to avoid redundant I/O.
+	// For select action, scan now to get task count.
+	var taskCount int
+	if isResume {
+		taskCount = len(target.tasks)
+	} else {
+		tasks, err := ScanTasks(r.config.TasksDir)
+		if err != nil {
+			return fmt.Errorf("failed to scan tasks for summary: %w", err)
+		}
+		taskCount = len(tasks)
+	}
+	doneCount := len(workflowState.CompletedTaskIDs)
+	var action string
+	if isResume {
+		action = fmt.Sprintf("resuming %s from step %d", target.taskID, target.step)
+	} else {
+		action = fmt.Sprintf("starting %s", workflowState.CurrentTaskID)
+	}
+	fmt.Fprintln(r.output, ui.FormatStartupSummary(r.config.TasksDir, r.config.ProviderName, taskCount, doneCount, action))
+
+	// Print prompt hint on fresh start with TTY (suppress on resume).
+	if !isResume && r.config.IsTTY {
+		fmt.Fprint(r.output, ui.Info("Type a directive and press Enter to queue it between steps"))
 	}
 
 	// Run the workflow loop

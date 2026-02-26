@@ -321,6 +321,17 @@ func rightAlignedLine(prefix, durationStr, iconColor, iconStyle, dimStyle, dimCo
 		resetCode)
 }
 
+// FormatStartupSummary returns a plain-text startup summary line (no ANSI codes).
+// Format: snap: <tasksDir> | <provider> | <N> tasks (<M> done) | <action>.
+func FormatStartupSummary(tasksDir, provider string, taskCount, doneCount int, action string) string {
+	noun := "tasks"
+	if taskCount == 1 {
+		noun = "task"
+	}
+	return fmt.Sprintf("snap: %s | %s | %d %s (%d done) | %s",
+		tasksDir, provider, taskCount, noun, doneCount, action)
+}
+
 // StripColors removes ANSI escape sequences from a string (useful for testing and sanitization).
 func StripColors(s string) string {
 	// Match all ANSI escape sequences:
