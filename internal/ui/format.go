@@ -214,7 +214,7 @@ func InterruptedWithContext(text string, currentStep, totalSteps int) string {
 	resetCode := ResolveStyle(WeightNormal)
 
 	mainLine := fmt.Sprintf("%s%s⚠  %s%s\n", styleCode, colorCode, text, resetCode)
-	contextLine := fmt.Sprintf("   %sState saved at step %d/%d - resume with 'snap'%s",
+	contextLine := fmt.Sprintf("   %sState saved at step %d/%d — resume with 'snap'%s",
 		dimCode, currentStep, totalSteps, resetCode)
 
 	return VerticalSpace(SpaceSM) + mainLine + contextLine + VerticalSpace(SpaceSM)

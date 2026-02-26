@@ -1199,3 +1199,101 @@ func TestRunner_StartupSummary(t *testing.T) {
 		assert.Contains(t, stripped, "resuming TASK2 from step 5", "summary should show resume action")
 	})
 }
+
+func TestRunner_CancelledContextReturnsContextCanceled(t *testing.T) {
+	t.Run("runner returns context.Canceled when context is cancelled", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		prdPath := filepath.Join(tmpDir, "PRD.md")
+		require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+		stateManager := state.NewManagerWithDir(tmpDir)
+		//nolint:errcheck // cleanup
+		_ = stateManager.Reset()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		var buf bytes.Buffer
+		mockExec := &MockExecutor{
+			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+				// Cancel the context during the first executor call (description generation).
+				cancel()
+				return nil
+			},
+		}
+
+		runner := workflow.NewRunner(mockExec, workflow.Config{
+			TasksDir:     tmpDir,
+			PRDPath:      prdPath,
+			ProviderName: "claude",
+		}, workflow.WithStateManager(stateManager), workflow.WithRunnerOutput(&buf))
+
+		err := runner.Run(ctx)
+
+		// Runner must return context.Canceled (not os.Exit, not a wrapped error).
+		assert.ErrorIs(t, err, context.Canceled, "runner should return context.Canceled when context is cancelled")
+	})
+
+	t.Run("runner does not call os.Exit on cancellation (test process survives)", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		prdPath := filepath.Join(tmpDir, "PRD.md")
+		require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+		stateManager := state.NewManagerWithDir(tmpDir)
+		//nolint:errcheck // cleanup
+		_ = stateManager.Reset()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		mockExec := &MockExecutor{
+			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+				cancel()
+				return nil
+			},
+		}
+
+		runner := workflow.NewRunner(mockExec, workflow.Config{
+			TasksDir:     tmpDir,
+			PRDPath:      prdPath,
+			ProviderName: "claude",
+		}, workflow.WithStateManager(stateManager))
+
+		// If os.Exit were called in the signal handler, this test process would die.
+		// The fact that this test completes normally proves os.Exit is not called.
+		err := runner.Run(ctx)
+		assert.Error(t, err, "runner should return an error, not call os.Exit")
+	})
+
+	t.Run("cancel idempotent - calling cancel twice does not panic", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		prdPath := filepath.Join(tmpDir, "PRD.md")
+		require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+		stateManager := state.NewManagerWithDir(tmpDir)
+		//nolint:errcheck // cleanup
+		_ = stateManager.Reset()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		mockExec := &MockExecutor{
+			runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+				// Cancel twice to verify idempotency.
+				cancel()
+				cancel()
+				return nil
+			},
+		}
+
+		runner := workflow.NewRunner(mockExec, workflow.Config{
+			TasksDir:     tmpDir,
+			PRDPath:      prdPath,
+			ProviderName: "claude",
+		}, workflow.WithStateManager(stateManager))
+
+		// Should not panic.
+		err := runner.Run(ctx)
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+}

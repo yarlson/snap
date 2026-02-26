@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -60,6 +61,12 @@ func init() {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		// Map context.Canceled (from SIGINT/SIGTERM) to exit code 130
+		// (standard SIGINT convention: 128 + 2). The signal handler in
+		// Runner.Run() already printed the interruption message.
+		if errors.Is(err, context.Canceled) {
+			os.Exit(130)
+		}
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

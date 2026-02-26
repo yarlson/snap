@@ -6,7 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -238,6 +240,107 @@ func TestCI_TriggersOnMainPushAndPR(t *testing.T) {
 
 	assert.Contains(t, wf.On.Push.Branches, "main", "CI should trigger on push to main")
 	assert.Contains(t, wf.On.PullRequest.Branches, "main", "CI should trigger on PR to main")
+}
+
+func TestGracefulSignalHandling_ExitCode130(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	// Build the snap binary.
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	// Create a project directory with a tasks subdirectory.
+	// pathutil.ValidatePath requires tasks dir within cwd.
+	projectDir := t.TempDir()
+	tasksSubDir := filepath.Join(projectDir, "docs", "tasks")
+	require.NoError(t, os.MkdirAll(tasksSubDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tasksSubDir, "TASK1.md"), []byte("# Task 1\nDo something long"), 0o600))
+
+	// Create a mock provider script that blocks until killed.
+	// Use exec so sleep replaces the shell — no orphaned child holding the pipe open.
+	mockBinDir := t.TempDir()
+	mockClaude := filepath.Join(mockBinDir, "claude")
+	require.NoError(t, os.WriteFile(mockClaude, []byte("#!/bin/sh\nexec /bin/sleep 3600\n"), 0o755)) //nolint:gosec // G306: test mock script needs exec permission
+
+	run := exec.CommandContext(ctx, binPath)
+	run.Dir = projectDir
+	run.Env = append(os.Environ(), "PATH="+mockBinDir+":/usr/bin:/bin")
+
+	// Start the process.
+	require.NoError(t, run.Start())
+
+	// Give it time to start up and reach the workflow.
+	// Note: This is a fixed sleep which can be flaky on very slow systems,
+	// but is acceptable for E2E tests. A more robust approach would wait for
+	// a sentinel output, but that adds complexity for marginal benefit.
+	time.Sleep(2 * time.Second)
+
+	// Send SIGINT.
+	require.NoError(t, run.Process.Signal(syscall.SIGINT))
+
+	// Wait for exit.
+	runErr := run.Wait()
+	require.Error(t, runErr)
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, runErr, &exitErr)
+	assert.Equal(t, 130, exitErr.ExitCode(), "SIGINT should produce exit code 130")
+}
+
+func TestGracefulSignalHandling_InterruptedMessage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	// Build the snap binary.
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	// Create a project directory with a tasks subdirectory.
+	projectDir := t.TempDir()
+	tasksSubDir := filepath.Join(projectDir, "docs", "tasks")
+	require.NoError(t, os.MkdirAll(tasksSubDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tasksSubDir, "TASK1.md"), []byte("# Task 1\nDo something"), 0o600))
+
+	// Create a mock provider that blocks until killed.
+	// Use exec so sleep replaces the shell — no orphaned child holding the pipe open.
+	mockBinDir := t.TempDir()
+	mockClaude := filepath.Join(mockBinDir, "claude")
+	require.NoError(t, os.WriteFile(mockClaude, []byte("#!/bin/sh\nexec /bin/sleep 3600\n"), 0o755)) //nolint:gosec // G306: test mock script needs exec permission
+
+	run := exec.CommandContext(ctx, binPath)
+	run.Dir = projectDir
+	run.Env = append(os.Environ(), "PATH="+mockBinDir+":/usr/bin:/bin")
+
+	// Capture combined output.
+	var combinedOut strings.Builder
+	run.Stdout = &combinedOut
+	run.Stderr = &combinedOut
+
+	require.NoError(t, run.Start())
+	// Give it time to start up and reach the workflow.
+	// Note: This is a fixed sleep which can be flaky on very slow systems,
+	// but is acceptable for E2E tests.
+	time.Sleep(2 * time.Second)
+	require.NoError(t, run.Process.Signal(syscall.SIGINT))
+
+	//nolint:errcheck // we expect non-zero exit
+	_ = run.Wait()
+
+	output := combinedOut.String()
+	assert.Contains(t, output, "Stopped by user", "output should contain interruption message")
 }
 
 func TestCI_RunsLintAndRaceTests(t *testing.T) {

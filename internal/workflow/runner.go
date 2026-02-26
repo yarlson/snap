@@ -114,26 +114,40 @@ func (r *Runner) StepContext() *StepContext {
 
 // Run executes the task implementation loop until interrupted.
 func (r *Runner) Run(ctx context.Context) error {
-	// Set up signal handling
+	// Set up signal handling: cancel context on SIGINT/SIGTERM, letting the
+	// main goroutine exit through its normal defer chain. This ensures all
+	// deferred cleanup (terminal restore, signal cleanup) runs before exit.
 	ctx, cancel := context.WithCancel(ctx)
-	// Note: cancel() is called explicitly in signal handler, no defer needed
+	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
 
 	go func() {
 		<-sigChan
-		// Write to stderr to bypass potentially-paused SwitchWriter.
-		// If output is paused (user composing input), writing to r.output
-		// would buffer the message and os.Exit would discard it unseen.
+		// Write the interrupted message, bypassing a potentially-paused buffer
+		// (e.g., SwitchWriter in paused mode when user is composing input).
+		// Use Direct() if available to ensure the message is always visible.
+		// After cancel(), the main goroutine will return through its defer chain,
+		// ensuring terminal cleanup runs.
 		currentState, err := r.stateManager.Load()
+		var msg string
 		if err == nil && currentState != nil {
-			fmt.Fprint(os.Stderr, ui.InterruptedWithContext("Stopped by user", currentState.CurrentStep, currentState.TotalSteps))
+			msg = ui.InterruptedWithContext("Stopped by user", currentState.CurrentStep, currentState.TotalSteps)
 		} else {
-			fmt.Fprint(os.Stderr, ui.Interrupted("Stopped by user"))
+			msg = ui.Interrupted("Stopped by user")
+		}
+
+		if sw, ok := r.output.(*ui.SwitchWriter); ok {
+			//nolint:errcheck // Best-effort flush of interrupted message; signal handler context.
+			_, _ = sw.Direct([]byte(msg))
+		} else {
+			fmt.Fprint(r.output, msg)
 		}
 		cancel()
-		os.Exit(130) // Standard exit code for SIGINT
+		// After signal.Stop (deferred above), a second SIGINT gets Go's
+		// default behavior: immediate process termination.
 	}()
 
 	// Handle fresh start flag
@@ -218,6 +232,11 @@ func (r *Runner) Run(ctx context.Context) error {
 		default:
 			iterationComplete, err := r.runIteration(ctx, workflowState)
 			if err != nil {
+				// If context was cancelled (e.g., by signal handler), return
+				// the context error so the caller can map it to exit code 130.
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				// Save error state
 				workflowState.MarkStepFailed(err)
 				if saveErr := r.stateManager.Save(workflowState); saveErr != nil {
@@ -404,6 +423,11 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 	}
 
 	for stepNum := startStep; stepNum <= totalSteps; stepNum++ {
+		// Check for context cancellation before starting each step.
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+
 		step := steps[stepNum-1]
 
 		// Update step context for queue UI display.
