@@ -1,6 +1,38 @@
 package ui
 
-import "strings"
+import (
+	"os"
+	"strings"
+
+	"golang.org/x/term"
+)
+
+// colorsEnabled controls whether ResolveColor and ResolveStyle return ANSI
+// escape codes.  Evaluated once at package init; disabled when the NO_COLOR
+// environment variable is set (any non-empty value) or stdout is not a terminal.
+var colorsEnabled = true
+
+func init() {
+	evalColorMode()
+}
+
+// evalColorMode sets colorsEnabled based on the NO_COLOR environment variable
+// and whether stdout is a terminal.
+func evalColorMode() {
+	colorsEnabled = os.Getenv("NO_COLOR") == "" && term.IsTerminal(int(os.Stdout.Fd())) //nolint:gosec // G115: fd fits int
+}
+
+// ResetColorMode re-evaluates whether colors should be enabled based on the
+// NO_COLOR environment variable.  Intended for test use with t.Setenv — the
+// TTY check is omitted because test stdout is never a terminal.
+//
+// Note: We treat an empty NO_COLOR value as "not set" (colors enabled).
+// The NO_COLOR spec ("when present, regardless of its value") is ambiguous
+// about empty values, but common practice (Rust, Python, etc.) treats empty
+// as unset. This is a deliberate design choice for usability.
+func ResetColorMode() {
+	colorsEnabled = os.Getenv("NO_COLOR") == ""
+}
 
 // ColorToken represents a semantic color role in the UI design system.
 type ColorToken string
@@ -77,7 +109,11 @@ const (
 )
 
 // ResolveColor maps a ColorToken to its ANSI escape code.
+// Returns an empty string when colors are disabled (NO_COLOR or non-TTY).
 func ResolveColor(token ColorToken) string {
+	if !colorsEnabled {
+		return ""
+	}
 	switch token {
 	case ColorPrimary:
 		return ansiPrimary
@@ -105,7 +141,11 @@ func ResolveColor(token ColorToken) string {
 }
 
 // ResolveStyle maps a StyleToken to its ANSI escape code.
+// Returns an empty string when colors are disabled (NO_COLOR or non-TTY).
 func ResolveStyle(token StyleToken) string {
+	if !colorsEnabled {
+		return ""
+	}
 	switch token {
 	case WeightBold:
 		return ansiBold

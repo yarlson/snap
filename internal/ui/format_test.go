@@ -469,3 +469,26 @@ func TestFormatStartupSummaryMatchesPRDSpec(t *testing.T) {
 	parts := strings.Split(result, " | ")
 	assert.Equal(t, 4, len(parts), "summary must have 4 pipe-separated sections")
 }
+
+func TestStepNumbered_NoColor_NoEscapeSequences(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	ui.ResetColorMode()
+	t.Cleanup(func() { ui.ResetColorMode() })
+
+	result := ui.StepNumbered(3, 10, "Implement TASK2")
+
+	assert.NotContains(t, result, "\033[", "output should contain no ANSI escape sequences when NO_COLOR=1")
+	assert.Contains(t, result, "Step 3/10", "output should still contain step numbering")
+	assert.Contains(t, result, "Implement TASK2", "output should still contain step text")
+}
+
+func TestStepNumbered_WithColor_HasEscapeSequences(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	ui.ResetColorMode()
+	t.Cleanup(func() { ui.ResetColorMode() })
+
+	result := ui.StepNumbered(3, 10, "Implement TASK2")
+
+	assert.Contains(t, result, "\033[", "output should contain ANSI escape sequences when colors enabled")
+	assert.Contains(t, result, "Step 3/10", "output should contain step numbering")
+}

@@ -544,3 +544,93 @@ func TestCI_RunsLintAndRaceTests(t *testing.T) {
 	}
 	assert.True(t, hasRaceTest, "test job must run go test with -race flag")
 }
+
+func TestE2E_NoColor_VersionOutputClean(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	// Build the snap binary.
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	// Run with NO_COLOR=1.
+	run := exec.CommandContext(ctx, binPath, "--version")
+	run.Env = append(os.Environ(), "NO_COLOR=1")
+	output, err := run.Output()
+	require.NoError(t, err)
+
+	outputStr := string(output)
+	assert.Contains(t, outputStr, "snap", "version output should contain 'snap'")
+	assert.NotContains(t, outputStr, "\033", "NO_COLOR=1 output must contain no escape sequences")
+}
+
+func TestE2E_NonTTY_DisablesColorsAutomatically(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	ctx := context.Background()
+
+	// Build the snap binary.
+	binPath := filepath.Join(t.TempDir(), "snap")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
+	build.Dir = mustModuleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", out)
+
+	// Create a project directory with a task file.
+	projectDir := t.TempDir()
+	tasksSubDir := filepath.Join(projectDir, "docs", "tasks")
+	require.NoError(t, os.MkdirAll(tasksSubDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(tasksSubDir, "TASK1.md"), []byte("# Task 1\nDo something"), 0o600))
+
+	// Create a mock provider that blocks until killed.
+	mockBinDir := t.TempDir()
+	mockClaude := filepath.Join(mockBinDir, "claude")
+	require.NoError(t, os.WriteFile(mockClaude, []byte("#!/bin/sh\nexec /bin/sleep 3600\n"), 0o755)) //nolint:gosec // G306: test mock script needs exec permission
+
+	run := exec.CommandContext(ctx, binPath)
+	run.Dir = projectDir
+	// Explicitly filter NO_COLOR from environment — only non-TTY detection
+	// (pipe stdout) should disable colors.
+	env := filterEnv(os.Environ(), "NO_COLOR")
+	env = append(env, "PATH="+mockBinDir+":/usr/bin:/bin")
+	run.Env = env
+
+	var combinedOut strings.Builder
+	run.Stdout = &combinedOut
+	run.Stderr = &combinedOut
+
+	require.NoError(t, run.Start())
+	time.Sleep(2 * time.Second)
+	require.NoError(t, run.Process.Signal(syscall.SIGINT))
+
+	//nolint:errcheck // we expect non-zero exit
+	_ = run.Wait()
+
+	output := combinedOut.String()
+	// Non-TTY stdout (pipe) should auto-disable colors — no ANSI escape sequences.
+	assert.NotContains(t, output, "\033",
+		"non-TTY stdout should automatically disable colors (no escape sequences)")
+	// Verify the interrupt message is still readable.
+	assert.Contains(t, output, "Stopped by user",
+		"output should contain readable interrupt message")
+}
+
+// filterEnv returns a copy of env with all entries matching the given key removed.
+func filterEnv(env []string, key string) []string {
+	prefix := key + "="
+	filtered := make([]string, 0, len(env))
+	for _, e := range env {
+		if !strings.HasPrefix(e, prefix) {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}

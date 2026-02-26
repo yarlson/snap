@@ -182,8 +182,11 @@ func (r *Reader) showQueuedConfirmation(prompt string) {
 	}
 	current, total, name := r.stepInfo.Get()
 	queueLen := r.queue.Len()
-	// QueuedPrompt also calls StripColors internally as defense-in-depth.
-	fmt.Fprint(r.output, ui.QueuedPrompt(ui.StripColors(prompt), current, total, name, queueLen))
+	// QueuedPrompt sanitizes input and returns formatted output safe for printing.
+	sanitized := ui.StripColors(prompt)
+	output := ui.QueuedPrompt(sanitized, current, total, name, queueLen)
+	//nolint:gosec // Output is from QueuedPrompt which sanitizes input
+	fmt.Fprint(r.output, output)
 }
 
 // showQueueStatus prints the current queue contents on empty Enter.

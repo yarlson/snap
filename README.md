@@ -190,6 +190,7 @@ To get the complete workflow state as JSON, use `--show-state --json`:
 | Variable        | Description                                           | Default  |
 | --------------- | ----------------------------------------------------- | -------- |
 | `SNAP_PROVIDER` | Provider selection (`claude`, `claude-code`, `codex`) | `claude` |
+| `NO_COLOR`      | Disable color output (set to any non-empty value)     | unset    |
 
 ### Provider selection
 
@@ -204,6 +205,21 @@ Supported values:
 - `claude` (default)
 - `claude-code` (alias for `claude`)
 - `codex`
+
+### Color output
+
+snap uses color-coded output by default for better readability. Colors are automatically disabled in these cases:
+
+- When the `NO_COLOR` environment variable is set to any non-empty value
+- When output is piped (non-TTY environments like CI/CD)
+
+To disable colors explicitly:
+
+```bash
+NO_COLOR=1 snap
+```
+
+This is useful in CI/CD pipelines or when redirecting output to files.
 
 ## How it works
 

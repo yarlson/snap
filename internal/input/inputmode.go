@@ -9,12 +9,15 @@ import (
 	"github.com/yarlson/snap/internal/ui"
 )
 
-// promptPrefix is the styled input prompt rendered via design tokens.
-var promptPrefix = fmt.Sprintf("%s%s❯ %s",
-	ui.ResolveColor(ui.ColorSecondary),
-	ui.ResolveStyle(ui.WeightBold),
-	ui.ResolveStyle(ui.WeightNormal),
-)
+// promptPrefix returns the styled input prompt rendered via design tokens.
+// Evaluated at call time so it respects NO_COLOR / color mode changes.
+func promptPrefix() string {
+	return fmt.Sprintf("%s%s❯ %s",
+		ui.ResolveColor(ui.ColorSecondary),
+		ui.ResolveStyle(ui.WeightBold),
+		ui.ResolveStyle(ui.WeightNormal),
+	)
+}
 
 // promptPrefixLen is the visible character width of the prompt prefix ("❯ ").
 const promptPrefixLen = 2 // "❯" (1 column) + " " (1 column)
@@ -240,7 +243,7 @@ func (m *Mode) activate(b byte) {
 	m.line = append(m.line[:0], b)
 	m.sw.Pause()
 	displayText := m.getDisplayText()
-	m.echo(fmt.Sprintf("\r%s%s", promptPrefix, displayText))
+	m.echo(fmt.Sprintf("\r%s%s", promptPrefix(), displayText))
 }
 
 // echo writes text directly to the underlying writer (bypassing the buffer).
@@ -262,5 +265,5 @@ func (m *Mode) clearPrompt() {
 func (m *Mode) redrawLine() {
 	// \r returns to column 0, \x1b[K clears from cursor to end of line.
 	displayText := m.getDisplayText()
-	m.echo("\r\x1b[K" + promptPrefix + displayText)
+	m.echo("\r\x1b[K" + promptPrefix() + displayText)
 }
