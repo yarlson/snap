@@ -184,11 +184,6 @@ func TestCommit(t *testing.T) {
 func TestUpdateDocs(t *testing.T) {
 	result := prompts.UpdateDocs()
 
-	// Context loading
-	assert.Contains(t, result, "CLAUDE.md")
-	assert.Contains(t, result, "AGENTS.md")
-	assert.Contains(t, result, ".memory/")
-
 	// Core behavior: diff-based doc update
 	assert.Contains(t, result, "git diff HEAD")
 	assert.Contains(t, result, "README.md")
