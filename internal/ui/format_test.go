@@ -3,6 +3,8 @@ package ui_test
 import (
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 
@@ -238,6 +240,118 @@ func TestCompleteBoxedSpacing(t *testing.T) {
 	// CompleteBoxed should have SpaceMD before (3 newlines) and SpaceSM after (2 newlines)
 	assert.True(t, strings.HasPrefix(stripped, "\n\n\n"), "CompleteBoxed should start with SpaceMD (3 newlines)")
 	assert.True(t, strings.HasSuffix(stripped, "\n\n"), "CompleteBoxed should end with SpaceSM (2 newlines)")
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    time.Duration
+		expected string
+	}{
+		{name: "zero", input: 0, expected: "0s"},
+		{name: "sub-second", input: 500 * time.Millisecond, expected: "0s"},
+		{name: "exactly 1 second", input: 1 * time.Second, expected: "1s"},
+		{name: "seconds only", input: 45 * time.Second, expected: "45s"},
+		{name: "59 seconds", input: 59 * time.Second, expected: "59s"},
+		{name: "exactly 1 minute", input: 1 * time.Minute, expected: "1m"},
+		{name: "minutes with zero seconds omitted", input: 2 * time.Minute, expected: "2m"},
+		{name: "minutes and seconds", input: 2*time.Minute + 34*time.Second, expected: "2m 34s"},
+		{name: "59 minutes 59 seconds", input: 59*time.Minute + 59*time.Second, expected: "59m 59s"},
+		{name: "exactly 1 hour", input: 1 * time.Hour, expected: "1h"},
+		{name: "hours with zero minutes omitted", input: 2 * time.Hour, expected: "2h"},
+		{name: "hours and minutes", input: 1*time.Hour + 12*time.Minute, expected: "1h 12m"},
+		{name: "hours minutes seconds truncated to hours minutes", input: 1*time.Hour + 12*time.Minute + 30*time.Second, expected: "1h 12m"},
+		{name: "truncates milliseconds", input: 45*time.Second + 999*time.Millisecond, expected: "45s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, ui.FormatDuration(tt.input))
+		})
+	}
+}
+
+func TestStepComplete(t *testing.T) {
+	result := ui.StepComplete("Step complete", 2*time.Minute+34*time.Second)
+	stripped := ui.StripColors(result)
+
+	// Should contain checkmark, text, and duration
+	assert.Contains(t, stripped, "✓")
+	assert.Contains(t, stripped, "Step complete")
+	assert.Contains(t, stripped, "2m 34s")
+
+	// Should be indented 1 char (matches Success)
+	assert.True(t, strings.HasPrefix(stripped, " ✓"), "StepComplete should be indented 1 char")
+
+	// Duration should be right-aligned to SeparatorWidth (70 runes)
+	assert.Equal(t, 70, utf8.RuneCountInString(stripped), "StepComplete should be exactly SeparatorWidth runes")
+}
+
+func TestStepCompleteZeroDuration(t *testing.T) {
+	result := ui.StepComplete("Step complete", 0)
+	stripped := ui.StripColors(result)
+
+	assert.Contains(t, stripped, "0s")
+	assert.Equal(t, 70, utf8.RuneCountInString(stripped))
+}
+
+func TestStepFailed(t *testing.T) {
+	result := ui.StepFailed("Step failed", 2*time.Minute+34*time.Second)
+	stripped := ui.StripColors(result)
+
+	// Should contain X mark, text, and duration
+	assert.Contains(t, stripped, "✗")
+	assert.Contains(t, stripped, "Step failed")
+	assert.Contains(t, stripped, "2m 34s")
+
+	// Should be indented 1 char (matches Error)
+	assert.True(t, strings.HasPrefix(stripped, " ✗"), "StepFailed should be indented 1 char")
+
+	// Duration should be right-aligned to SeparatorWidth (70 runes)
+	assert.Equal(t, 70, utf8.RuneCountInString(stripped), "StepFailed should be exactly SeparatorWidth runes")
+}
+
+func TestCompleteWithDuration(t *testing.T) {
+	result := ui.CompleteWithDuration("Iteration complete", 12*time.Minute+47*time.Second)
+	stripped := ui.StripColors(result)
+
+	// Should contain sparkle, text, and duration
+	assert.Contains(t, stripped, "✨")
+	assert.Contains(t, stripped, "Iteration complete")
+	assert.Contains(t, stripped, "12m 47s")
+
+	// Should start with newline (matches Complete)
+	assert.True(t, strings.HasPrefix(stripped, "\n"), "CompleteWithDuration should start with newline")
+
+	// Content line (after leading newline, before trailing newline) should be SeparatorWidth
+	trimmed := strings.TrimSpace(stripped)
+	assert.Equal(t, 70, utf8.RuneCountInString(trimmed), "CompleteWithDuration content should be exactly SeparatorWidth runes")
+
+	// Should end with newline (matches Complete)
+	assert.True(t, strings.HasSuffix(stripped, "\n"), "CompleteWithDuration should end with newline")
+}
+
+func TestDurationUsesDimStyling(t *testing.T) {
+	dimWeight := "\033[2m"       // ansiDimmed (WeightDim)
+	dimColor := "\033[38;5;240m" // ansiDim (ColorDim)
+
+	t.Run("StepComplete duration has dim color and weight", func(t *testing.T) {
+		raw := ui.StepComplete("Step complete", 45*time.Second)
+		assert.Contains(t, raw, dimWeight, "StepComplete should use dim weight for duration")
+		assert.Contains(t, raw, dimColor, "StepComplete should use dim color for duration")
+	})
+
+	t.Run("StepFailed duration has dim color and weight", func(t *testing.T) {
+		raw := ui.StepFailed("Step failed", 45*time.Second)
+		assert.Contains(t, raw, dimWeight, "StepFailed should use dim weight for duration")
+		assert.Contains(t, raw, dimColor, "StepFailed should use dim color for duration")
+	})
+
+	t.Run("CompleteWithDuration duration has dim color and weight", func(t *testing.T) {
+		raw := ui.CompleteWithDuration("Iteration complete", 12*time.Minute+47*time.Second)
+		assert.Contains(t, raw, dimWeight, "CompleteWithDuration should use dim weight for duration")
+		assert.Contains(t, raw, dimColor, "CompleteWithDuration should use dim color for duration")
+	})
 }
 
 func TestInterruptedWithContextSpacing(t *testing.T) {

@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/yarlson/snap/internal/model"
+	"github.com/yarlson/snap/internal/ui"
 	"github.com/yarlson/snap/internal/workflow"
 )
 
@@ -66,6 +68,46 @@ func TestStepRunner_RunStep(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStepRunner_RunStepNumbered_PrintsTimingOnSuccess(t *testing.T) {
+	var buf bytes.Buffer
+	mockExec := &MockExecutor{
+		runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+			return nil
+		},
+	}
+
+	runner := workflow.NewStepRunner(mockExec, &buf)
+	err := runner.RunStepNumbered(context.Background(), 1, 9, "Test Step", model.Fast, "arg")
+
+	assert.NoError(t, err)
+
+	output := ui.StripColors(buf.String())
+	assert.Contains(t, output, "✓")
+	assert.Contains(t, output, "Step complete")
+	// Duration should be present (at minimum "0s")
+	assert.Contains(t, output, "s")
+}
+
+func TestStepRunner_RunStepNumbered_PrintsTimingOnFailure(t *testing.T) {
+	var buf bytes.Buffer
+	mockExec := &MockExecutor{
+		runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+			return errors.New("command failed")
+		},
+	}
+
+	runner := workflow.NewStepRunner(mockExec, &buf)
+	err := runner.RunStepNumbered(context.Background(), 1, 9, "Test Step", model.Fast, "arg")
+
+	assert.Error(t, err)
+
+	output := ui.StripColors(buf.String())
+	assert.Contains(t, output, "✗")
+	assert.Contains(t, output, "Step failed")
+	// Duration should be present (at minimum "0s")
+	assert.Contains(t, output, "s")
 }
 
 func TestWorkflow_BuildPrompt(t *testing.T) {

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
+	"unicode/utf8"
 )
 
 // Header formats a major section header (e.g., "Implementing next task").
@@ -237,6 +239,107 @@ func InterruptedWithContext(text string, currentStep, totalSteps int) string {
 		dimCode, currentStep, totalSteps, resetCode)
 
 	return VerticalSpace(SpaceSM) + mainLine + contextLine + VerticalSpace(SpaceSM)
+}
+
+// FormatDuration converts a time.Duration to a compact human-readable string.
+// Rules: <60s → "45s", 1m–59m → "2m 34s", >=60m → "1h 12m".
+// Zero-value components are omitted. Sub-second durations show "0s".
+func FormatDuration(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	d = d.Truncate(time.Second)
+
+	totalSeconds := int(d.Seconds())
+	if totalSeconds == 0 {
+		return "0s"
+	}
+
+	h := totalSeconds / 3600
+	m := (totalSeconds % 3600) / 60
+	s := totalSeconds % 60
+
+	if h > 0 {
+		if m == 0 {
+			return fmt.Sprintf("%dh", h)
+		}
+		return fmt.Sprintf("%dh %dm", h, m)
+	}
+	if m > 0 {
+		if s == 0 {
+			return fmt.Sprintf("%dm", m)
+		}
+		return fmt.Sprintf("%dm %ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
+}
+
+// StepComplete renders a step-done line with a right-aligned duration.
+// Uses success color for the checkmark, dim weight for text and duration.
+func StepComplete(text string, elapsed time.Duration) string {
+	durationStr := FormatDuration(elapsed)
+	prefix := " ✓ " + StripColors(text)
+	return rightAlignedLine(prefix, durationStr,
+		ResolveColor(ColorSuccess), ResolveStyle(WeightBold),
+		ResolveStyle(WeightDim), ResolveColor(ColorDim))
+}
+
+// StepFailed renders a step-failed line with a right-aligned duration.
+// Uses error color for the X mark, dim weight for text and duration.
+func StepFailed(text string, elapsed time.Duration) string {
+	durationStr := FormatDuration(elapsed)
+	prefix := " ✗ " + StripColors(text)
+	return rightAlignedLine(prefix, durationStr,
+		ResolveColor(ColorError), ResolveStyle(WeightBold),
+		ResolveStyle(WeightDim), ResolveColor(ColorDim))
+}
+
+// CompleteWithDuration renders a completion message with a right-aligned duration.
+// Uses celebrate color for the sparkle and text, dim for the duration.
+func CompleteWithDuration(text string, elapsed time.Duration) string {
+	durationStr := FormatDuration(elapsed)
+	prefix := "✨ " + text
+	colorCode := ResolveColor(ColorCelebrate)
+	styleCode := ResolveStyle(WeightBold)
+	dimCode := ResolveStyle(WeightDim)
+	dimColor := ResolveColor(ColorDim)
+	resetCode := ResolveStyle(WeightNormal)
+
+	padWidth := SeparatorWidth - utf8.RuneCountInString(prefix) - len(durationStr)
+	if padWidth < 1 {
+		padWidth = 1
+	}
+
+	return fmt.Sprintf("\n%s%s%s%s%s%s%s%s\n",
+		styleCode, colorCode, prefix,
+		strings.Repeat(" ", padWidth),
+		dimCode, dimColor, durationStr,
+		resetCode)
+}
+
+// rightAlignedLine renders a line with an icon prefix and right-aligned duration.
+// The icon (first 2 runes of prefix) uses iconColor + iconStyle; the rest uses dimStyle;
+// the duration uses dimStyle + dimColor. Total visible width = SeparatorWidth.
+func rightAlignedLine(prefix, durationStr, iconColor, iconStyle, dimStyle, dimColor string) string {
+	resetCode := ResolveStyle(WeightNormal)
+
+	// Split prefix into icon part (e.g., " ✓") and text part (e.g., " Step complete")
+	// The icon is the indent + symbol (first 2 runes: space, symbol)
+	runes := []rune(prefix)
+	icon := string(runes[:2]) // " ✓" or " ✗"
+	text := string(runes[2:]) // " Step complete"
+
+	padWidth := SeparatorWidth - utf8.RuneCountInString(prefix) - len(durationStr)
+	if padWidth < 1 {
+		padWidth = 1
+	}
+
+	return fmt.Sprintf("%s%s%s%s%s%s%s%s%s%s",
+		iconStyle, iconColor, icon, resetCode,
+		dimStyle, text,
+		strings.Repeat(" ", padWidth),
+		dimColor, durationStr,
+		resetCode)
 }
 
 // StripColors removes ANSI escape sequences from a string (useful for testing and sanitization).

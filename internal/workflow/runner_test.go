@@ -14,6 +14,7 @@ import (
 
 	"github.com/yarlson/snap/internal/model"
 	"github.com/yarlson/snap/internal/state"
+	"github.com/yarlson/snap/internal/ui"
 	"github.com/yarlson/snap/internal/workflow"
 )
 
@@ -540,6 +541,40 @@ func TestRunner_ResumeFailsOnInvalidState(t *testing.T) {
 		// Executor should never be called for invalid resume state.
 		assert.False(t, executorCalled, "executor should not run when resume state is invalid")
 	})
+}
+
+func TestRunner_IterationCompleteIncludesDuration(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	prdPath := filepath.Join(tmpDir, "PRD.md")
+	require.NoError(t, os.WriteFile(prdPath, []byte("# PRD"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "TASK1.md"), []byte("# Task 1"), 0o600))
+
+	stateManager := state.NewManagerWithDir(tmpDir)
+	//nolint:errcheck // cleanup
+	_ = stateManager.Reset()
+
+	var buf bytes.Buffer
+	mockExec := &MockExecutor{
+		runFunc: func(_ context.Context, _ io.Writer, _ model.Type, _ ...string) error {
+			return nil
+		},
+	}
+
+	runner := workflow.NewRunner(mockExec, workflow.Config{
+		TasksDir: tmpDir,
+		PRDPath:  prdPath,
+	}, workflow.WithStateManager(stateManager), workflow.WithRunnerOutput(&buf))
+
+	err := runner.Run(context.Background())
+	assert.NoError(t, err)
+
+	output := buf.String()
+	// The iteration complete line should contain timing
+	assert.Contains(t, output, "Iteration complete")
+	// Should contain a duration marker (at minimum "0s")
+	stripped := ui.StripColors(output)
+	assert.Regexp(t, `Iteration complete\s+\d+`, stripped)
 }
 
 func TestRunner_StepCount(t *testing.T) {

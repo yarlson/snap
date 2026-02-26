@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/yarlson/snap/internal/model"
 	"github.com/yarlson/snap/internal/ui"
@@ -49,10 +50,15 @@ func (r *StepRunner) RunStep(ctx context.Context, stepName string, mt model.Type
 func (r *StepRunner) RunStepNumbered(ctx context.Context, current, total int, stepName string, mt model.Type, args ...string) error {
 	fmt.Fprint(r.output, ui.StepNumbered(current, total, stepName))
 
+	start := time.Now()
 	if err := r.executor.Run(ctx, r.output, mt, args...); err != nil {
+		elapsed := time.Since(start)
+		fmt.Fprintln(r.output, ui.StepFailed("Step failed", elapsed))
 		return fmt.Errorf("step %d/%d %q failed: %w", current, total, stepName, err)
 	}
 
+	elapsed := time.Since(start)
+	fmt.Fprintln(r.output, ui.StepComplete("Step complete", elapsed))
 	return nil
 }
 

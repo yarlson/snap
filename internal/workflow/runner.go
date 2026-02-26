@@ -229,6 +229,7 @@ func (r *Runner) selectIdleTask(workflowState *state.State) (bool, error) {
 }
 
 func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (bool, error) {
+	taskStart := time.Now()
 	taskLabel := workflowState.CurrentTaskID
 	if taskLabel == "" {
 		taskLabel = "next task"
@@ -370,7 +371,7 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 	}
 
 	// Task complete - mark as completed and reset to idle.
-	fmt.Fprint(r.output, ui.Complete("Iteration complete"))
+	fmt.Fprint(r.output, ui.CompleteWithDuration("Iteration complete", time.Since(taskStart)))
 
 	if id := workflowState.CurrentTaskID; id != "" {
 		alreadyCompleted := false
