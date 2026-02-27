@@ -350,3 +350,31 @@ func TestDelete_PathTraversalDot(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid session name")
 }
+
+// --- Unit tests: Resolve ---
+
+func TestResolve_ExistingSession(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+
+	dir, err := Resolve(root, "auth")
+	require.NoError(t, err)
+	assert.Equal(t, Dir(root, "auth"), dir)
+}
+
+func TestResolve_NonexistentSession(t *testing.T) {
+	root := t.TempDir()
+
+	_, err := Resolve(root, "auth")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+	assert.Contains(t, err.Error(), "snap new auth")
+}
+
+func TestResolve_InvalidName(t *testing.T) {
+	root := t.TempDir()
+
+	_, err := Resolve(root, "bad name!")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid session name")
+}

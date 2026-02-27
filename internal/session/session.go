@@ -166,6 +166,17 @@ func deriveStatus(taskCount int, st *sessionState, stateCorrupt, hasPlanning boo
 	return "idle"
 }
 
+// Resolve validates that a named session exists and returns its directory path.
+func Resolve(projectRoot, name string) (string, error) {
+	if err := ValidateName(name); err != nil {
+		return "", err
+	}
+	if !Exists(projectRoot, name) {
+		return "", fmt.Errorf("session '%s' not found — create it with: snap new %s", name, name)
+	}
+	return Dir(projectRoot, name), nil
+}
+
 // Delete removes a session directory and all its contents.
 func Delete(projectRoot, name string) error {
 	if err := ValidateName(name); err != nil {

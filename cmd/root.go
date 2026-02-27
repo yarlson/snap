@@ -23,8 +23,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:           "snap",
+	Use:           "snap [session]",
 	Short:         "Autonomous task-by-task implementation tool",
+	Args:          cobra.MaximumNArgs(1),
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	Long: `snap automates the task-by-task implementation workflow:

@@ -334,6 +334,90 @@ func TestManager_HumanReadable(t *testing.T) {
 	}
 }
 
+func TestNewManagerInDir_SavesDirectlyInDir(t *testing.T) {
+	dir := t.TempDir()
+	mgr := NewManagerInDir(dir)
+
+	s := NewState("tasks", "tasks/PRD.md", 10)
+	if err := mgr.Save(s); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// State file should be at dir/state.json (not dir/.snap/state.json).
+	statePath := filepath.Join(dir, StateFile)
+	if _, err := os.Stat(statePath); os.IsNotExist(err) {
+		t.Errorf("state.json not found at %s", statePath)
+	}
+
+	// .snap subdirectory should NOT be created.
+	snapSubDir := filepath.Join(dir, StateDir)
+	if _, err := os.Stat(filepath.Join(snapSubDir, StateFile)); err == nil {
+		t.Error("state.json should not exist inside .snap subdirectory")
+	}
+
+	// Load should work.
+	loaded, err := mgr.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.TasksDir != "tasks" {
+		t.Errorf("TasksDir = %s, want tasks", loaded.TasksDir)
+	}
+}
+
+func TestNewManagerInDir_RoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	mgr := NewManagerInDir(dir)
+
+	s := NewState("tasks", "tasks/PRD.md", 10)
+	s.CurrentTaskID = "TASK2"
+	s.CurrentStep = 5
+	s.CompletedTaskIDs = []string{"TASK1"}
+
+	if err := mgr.Save(s); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	loaded, err := mgr.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if loaded.CurrentTaskID != "TASK2" {
+		t.Errorf("CurrentTaskID = %s, want TASK2", loaded.CurrentTaskID)
+	}
+	if loaded.CurrentStep != 5 {
+		t.Errorf("CurrentStep = %d, want 5", loaded.CurrentStep)
+	}
+	if len(loaded.CompletedTaskIDs) != 1 || loaded.CompletedTaskIDs[0] != "TASK1" {
+		t.Errorf("CompletedTaskIDs = %v, want [TASK1]", loaded.CompletedTaskIDs)
+	}
+}
+
+func TestNewManagerInDir_ResetAndExists(t *testing.T) {
+	dir := t.TempDir()
+	mgr := NewManagerInDir(dir)
+
+	if mgr.Exists() {
+		t.Error("should not exist initially")
+	}
+
+	s := NewState("tasks", "tasks/PRD.md", 10)
+	if err := mgr.Save(s); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	if !mgr.Exists() {
+		t.Error("should exist after save")
+	}
+
+	if err := mgr.Reset(); err != nil {
+		t.Fatalf("Reset() error = %v", err)
+	}
+	if mgr.Exists() {
+		t.Error("should not exist after reset")
+	}
+}
+
 func TestManager_SerializedFieldPresence(t *testing.T) {
 	tmpDir := t.TempDir()
 	mgr := NewManagerWithDir(tmpDir)

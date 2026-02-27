@@ -35,6 +35,7 @@ type Config struct {
 	FreshStart   bool   // Force fresh start, ignore existing state
 	ProviderName string // Provider display name (e.g. "claude", "codex")
 	IsTTY        bool   // Whether stdout is a terminal
+	DisplayName  string // For startup summary (session name or tasks dir path); falls back to TasksDir if empty
 }
 
 // StateManager defines the interface for state management, used in tests for dependency injection.
@@ -217,7 +218,11 @@ func (r *Runner) Run(ctx context.Context) error {
 	} else {
 		action = fmt.Sprintf("starting %s", workflowState.CurrentTaskID)
 	}
-	fmt.Fprintln(r.output, ui.FormatStartupSummary(r.config.TasksDir, r.config.ProviderName, taskCount, doneCount, action))
+	displayName := r.config.TasksDir
+	if r.config.DisplayName != "" {
+		displayName = r.config.DisplayName
+	}
+	fmt.Fprintln(r.output, ui.FormatStartupSummary(displayName, r.config.ProviderName, taskCount, doneCount, action))
 
 	// Print prompt hint on fresh start with TTY (suppress on resume).
 	if !isResume && r.config.IsTTY {

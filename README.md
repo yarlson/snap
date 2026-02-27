@@ -91,8 +91,8 @@ snap new my-project
 
 # Create task files in .snap/sessions/my-project/tasks/
 
-# Run the session
-snap --tasks-dir .snap/sessions/my-project/tasks
+# Run the session by name
+snap run my-project
 ```
 
 See `example/` for a complete working example.
@@ -103,10 +103,14 @@ See `example/` for a complete working example.
 
 ```bash
 snap [flags]
-snap run [flags]
+snap run [session] [flags]
 ```
 
-Runs the task-by-task implementation workflow. Both commands are equivalent. By default, reads tasks from `docs/tasks/` and implements each task until stopped. Use `snap run` when you need explicit subcommand syntax (e.g., in scripts or CI/CD).
+Runs the task-by-task implementation workflow. By default, reads tasks from `docs/tasks/` and implements each task until stopped. Optionally specify a `[session]` name to run a named session (created with `snap new`).
+
+**Auto-detection**: If no session name is provided and exactly one session exists, snap automatically uses it. If multiple sessions exist, snap shows an error with a list of available sessions.
+
+**Session example**: `snap run my-project` runs the session named `my-project` (files in `.snap/sessions/my-project/tasks/`).
 
 ### Init subcommand
 
@@ -151,7 +155,7 @@ snap new auth-system
 # Create files: .snap/sessions/auth-system/tasks/TASK1.md, TASK2.md, ...
 
 # Run the session workflow
-snap --tasks-dir .snap/sessions/auth-system/tasks
+snap run auth-system
 ```
 
 #### List sessions
@@ -252,8 +256,11 @@ snap new auth-feature
 # List all sessions
 snap list
 
-# Run the session workflow
-snap --tasks-dir .snap/sessions/auth-feature/tasks
+# Run a specific session
+snap run auth-feature
+
+# Show state for a specific session
+snap run auth-feature --show-state
 
 # Delete a session (with confirmation)
 snap delete auth-feature
@@ -356,6 +363,13 @@ snap: docs/tasks/ | claude | 3 tasks (1 done) | starting TASK2
 Type a directive and press Enter to queue it between steps
 ```
 
+When running a named session, the session name appears in the startup summary:
+
+```
+snap: auth-feature | claude | 3 tasks (1 done) | starting TASK2
+Type a directive and press Enter to queue it between steps
+```
+
 The startup summary shows your progress (tasks completed, current action), then the workflow begins:
 
 ```
@@ -407,12 +421,18 @@ your-project/
 
 ## Resume from interruption
 
-snap saves state after every completed step in `.snap/state.json`. If interrupted (Ctrl+C, crash, system restart), run `snap` again - it resumes from the exact step where it stopped.
+snap saves state after every completed step. For the default layout, state is saved in `.snap/state.json`. For sessions, state is saved in `.snap/sessions/<name>/state.json`. If interrupted (Ctrl+C, crash, system restart), run `snap` or `snap run <session>` again - it resumes from the exact step where it stopped.
 
 On resume, you'll see a startup summary showing your position:
 
 ```
 snap: docs/tasks/ | claude | 3 tasks (1 done) | resuming TASK2 from step 5
+```
+
+When resuming a session:
+
+```
+snap: auth-feature | claude | 3 tasks (1 done) | resuming TASK2 from step 5
 ```
 
 This confirms which task and step you're resuming from before the workflow continues.

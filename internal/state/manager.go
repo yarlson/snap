@@ -35,7 +35,7 @@ func NewManager() *Manager {
 }
 
 // NewManagerWithDir creates a new state manager with a custom directory.
-// Used for testing with temporary directories.
+// Used for testing with temporary directories. State lives at dir/.snap/state.json.
 func NewManagerWithDir(dir string) *Manager {
 	stateDir := filepath.Join(dir, StateDir)
 	statePath := filepath.Join(stateDir, StateFile)
@@ -43,6 +43,16 @@ func NewManagerWithDir(dir string) *Manager {
 	return &Manager{
 		stateDir:  stateDir,
 		statePath: statePath,
+	}
+}
+
+// NewManagerInDir creates a state manager that stores state.json directly in dir.
+// Used for session-scoped state where state.json lives at the session root
+// (e.g., .snap/sessions/<name>/state.json).
+func NewManagerInDir(dir string) *Manager {
+	return &Manager{
+		stateDir:  dir,
+		statePath: filepath.Join(dir, StateFile),
 	}
 }
 
