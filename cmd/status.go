@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/yarlson/snap/internal/session"
+	"github.com/yarlson/snap/internal/ui"
 	"github.com/yarlson/snap/internal/workflow"
 )
 
@@ -36,35 +37,35 @@ func statusRun(cmd *cobra.Command, args []string) error {
 
 	out := cmd.OutOrStdout()
 
-	fmt.Fprintf(out, "Session: %s\n", st.Name)
-	fmt.Fprintf(out, "Path:    %s\n", st.TasksDir)
+	fmt.Fprint(out, ui.KeyValue("Session", st.Name))
+	fmt.Fprint(out, ui.KeyValue("Path   ", st.TasksDir))
 
 	if len(st.Tasks) == 0 {
 		fmt.Fprintln(out)
-		fmt.Fprintf(out, "No task files found. Run: snap plan %s\n", st.Name)
+		fmt.Fprint(out, ui.Info(fmt.Sprintf("No task files found. Run: snap plan %s", st.Name)))
 		return nil
 	}
 
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "Tasks:")
+	fmt.Fprint(out, ui.Info("Tasks:"))
 
 	completedCount := 0
 	for _, task := range st.Tasks {
-		marker := "[ ]"
-		suffix := ""
-		if task.Completed {
-			marker = "[x]"
+		switch {
+		case task.Completed:
 			completedCount++
-		} else if task.ID == st.ActiveTask && st.ActiveStep > 0 {
-			marker = "[~]"
-			suffix = fmt.Sprintf(" (step %d/%d: %s)", st.ActiveStep, st.TotalSteps, workflow.StepName(st.ActiveStep))
+			fmt.Fprint(out, ui.TaskDone(task.ID))
+		case task.ID == st.ActiveTask && st.ActiveStep > 0:
+			suffix := fmt.Sprintf("step %d/%d: %s", st.ActiveStep, st.TotalSteps, workflow.StepName(st.ActiveStep))
+			fmt.Fprint(out, ui.TaskActive(task.ID, suffix))
+		default:
+			fmt.Fprint(out, ui.TaskPending(task.ID))
 		}
-		fmt.Fprintf(out, "  %s %s%s\n", marker, task.ID, suffix)
 	}
 
 	remaining := len(st.Tasks) - completedCount
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "%d tasks remaining, %d complete\n", remaining, completedCount)
+	fmt.Fprint(out, ui.Info(fmt.Sprintf("%d tasks remaining, %d complete", remaining, completedCount)))
 
 	return nil
 }

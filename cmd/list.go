@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/yarlson/snap/internal/session"
+	"github.com/yarlson/snap/internal/ui"
 )
 
 var listCmd = &cobra.Command{
@@ -30,10 +31,10 @@ func listRun(cmd *cobra.Command, _ []string) error {
 	out := cmd.OutOrStdout()
 
 	if len(sessions) == 0 {
-		fmt.Fprintln(out, "No sessions found")
+		fmt.Fprint(out, ui.Info("No sessions found"))
 		fmt.Fprintln(out)
-		fmt.Fprintln(out, "To create a session:")
-		fmt.Fprintln(out, "  snap new <name>")
+		fmt.Fprint(out, ui.Info("To create a session:"))
+		fmt.Fprint(out, ui.Info("  snap new <name>"))
 		return nil
 	}
 
@@ -53,11 +54,15 @@ func listRun(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	boldCode := ui.ResolveStyle(ui.WeightBold)
+	dimCode := ui.ResolveStyle(ui.WeightDim)
+	resetCode := ui.ResolveStyle(ui.WeightNormal)
+
 	for i, s := range sessions {
-		fmt.Fprintf(out, "  %-*s  %-*s  %s\n",
-			maxName, s.Name,
-			maxTasks, taskSummaries[i],
-			s.Status)
+		fmt.Fprintf(out, "  %s%-*s%s  %s%-*s%s  %s%s\n",
+			boldCode, maxName, s.Name, resetCode,
+			dimCode, maxTasks, taskSummaries[i], resetCode,
+			s.Status, resetCode)
 	}
 
 	return nil
