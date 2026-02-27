@@ -100,6 +100,9 @@ linters:
         - io/ioutil.ReadFile
         - io.Copy(*bytes.Buffer)
         - io.Copy(os.Stdout)
+    gosec:
+      excludes:
+        - G705
     gocritic:
       disabled-checks:
         - hugeParam

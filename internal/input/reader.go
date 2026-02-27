@@ -185,7 +185,6 @@ func (r *Reader) showQueuedConfirmation(prompt string) {
 	// QueuedPrompt sanitizes input and returns formatted output safe for printing.
 	sanitized := ui.StripColors(prompt)
 	output := ui.QueuedPrompt(sanitized, current, total, name, queueLen)
-	//nolint:gosec // Output is from QueuedPrompt which sanitizes input
 	fmt.Fprint(r.output, output)
 }
 
