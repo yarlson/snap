@@ -259,10 +259,24 @@ func isSpace(b byte) bool {
 }
 
 // consumeEscape reads and discards the remainder of an ANSI escape sequence.
-// This prevents arrow keys, Home, End, etc. from injecting garbage characters
-// into the line buffer when the terminal is in raw mode.
 func (rr *rawReader) consumeEscape(buf []byte) {
-	b, ok := rr.readByte(buf)
+	consumeEscape(rr.source, buf)
+}
+
+// readByte reads a single byte from r into buf and returns it.
+func readByte(r io.Reader, buf []byte) (byte, bool) {
+	n, err := r.Read(buf)
+	if err != nil || n == 0 {
+		return 0, false
+	}
+	return buf[0], true
+}
+
+// consumeEscape reads and discards the remainder of an ANSI escape sequence
+// from r. This prevents arrow keys, Home, End, etc. from injecting garbage
+// characters into the line buffer when the terminal is in raw mode.
+func consumeEscape(r io.Reader, buf []byte) {
+	b, ok := readByte(r, buf)
 	if !ok {
 		return
 	}
@@ -272,7 +286,7 @@ func (rr *rawReader) consumeEscape(buf []byte) {
 	}
 	// CSI sequence: ESC [ (parameter bytes 0x30-0x3F)* (intermediate bytes 0x20-0x2F)* (final byte 0x40-0x7E)
 	for {
-		b, ok = rr.readByte(buf)
+		b, ok = readByte(r, buf)
 		if !ok {
 			return
 		}
@@ -280,15 +294,6 @@ func (rr *rawReader) consumeEscape(buf []byte) {
 			return // final byte — sequence complete
 		}
 	}
-}
-
-// readByte reads a single byte from the source into buf and returns it.
-func (rr *rawReader) readByte(buf []byte) (byte, bool) {
-	n, err := rr.source.Read(buf)
-	if err != nil || n == 0 {
-		return 0, false
-	}
-	return buf[0], true
 }
 
 // restore returns the terminal to its original state. Safe to call multiple

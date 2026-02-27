@@ -47,7 +47,7 @@ func planRun(_ *cobra.Command, args []string) error {
 
 	// Read --from file if specified.
 	var opts []plan.PlannerOption
-	opts = append(opts, plan.WithOutput(os.Stdout), plan.WithInput(os.Stdin))
+	opts = append(opts, plan.WithOutput(os.Stdout), plan.WithInput(os.Stdin), plan.WithTerminal(os.Stdin))
 
 	if fromFile != "" {
 		content, err := os.ReadFile(fromFile)
