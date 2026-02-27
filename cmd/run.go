@@ -85,7 +85,7 @@ func run(_ *cobra.Command, args []string) error {
 
 	// Check if PRD file exists and warn if not.
 	if exists, warning := pathutil.CheckPathExists(rc.prdPath); !exists {
-		fmt.Fprintln(os.Stderr, warning)
+		fmt.Fprint(os.Stderr, ui.Info(warning))
 	}
 
 	executor, err := provider.NewExecutorFromEnv()
@@ -239,7 +239,7 @@ func handleShowState(sessionName string) error {
 	}
 
 	if !sm.Exists() {
-		fmt.Println("No state file exists")
+		fmt.Print(ui.Info("No state file exists"))
 		return nil
 	}
 

@@ -239,6 +239,9 @@ func TestE2E_PlanFileListing(t *testing.T) {
 	assert.Contains(t, outputStr, "Files in")
 	assert.Contains(t, outputStr, "PRD.md")
 	assert.Contains(t, outputStr, "TECHNOLOGY.md")
+
+	// Assert run instruction is printed after plan completion.
+	assert.Contains(t, outputStr, "Run: snap run auth")
 }
 
 // Test: snap plan with multiple sessions and no name shows error.

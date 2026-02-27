@@ -297,6 +297,9 @@ func TestPlanner_FullPipeline(t *testing.T) {
 	}
 
 	output := out.String()
+	assert.Contains(t, output, "Planning session")
+	assert.Contains(t, output, "Gathering requirements")
+	assert.Contains(t, output, "Generating planning documents")
 	assert.Contains(t, output, "Planning complete")
 }
 

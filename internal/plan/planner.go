@@ -112,11 +112,11 @@ func (p *Planner) onFirstMessage() error {
 func (p *Planner) Run(ctx context.Context) error {
 	switch {
 	case p.briefBody != "":
-		fmt.Fprintf(p.output, "Planning session '%s' — using %s as input\n", p.sessionName, p.briefFile)
+		fmt.Fprint(p.output, ui.Step(fmt.Sprintf("Planning session '%s' — using %s as input", p.sessionName, p.briefFile)))
 	case p.resume:
-		fmt.Fprintf(p.output, "Resuming planning for session '%s'\n", p.sessionName)
+		fmt.Fprint(p.output, ui.Step(fmt.Sprintf("Resuming planning for session '%s'", p.sessionName)))
 	default:
-		fmt.Fprintf(p.output, "Planning session '%s'\n", p.sessionName)
+		fmt.Fprint(p.output, ui.Step(fmt.Sprintf("Planning session '%s'", p.sessionName)))
 	}
 
 	// Phase 1: requirements gathering (skipped when brief is set).
@@ -135,9 +135,7 @@ func (p *Planner) Run(ctx context.Context) error {
 
 // gatherRequirements runs the interactive Phase 1 chat loop.
 func (p *Planner) gatherRequirements(ctx context.Context) error {
-	fmt.Fprintln(p.output)
-	fmt.Fprintln(p.output, "Gathering requirements — type /done when ready")
-	fmt.Fprintln(p.output)
+	fmt.Fprint(p.output, ui.Step("Gathering requirements — type /done when ready"))
 
 	// Send the initial requirements-gathering prompt.
 	// When resuming, add -c flag to continue previous conversation.
@@ -233,16 +231,14 @@ func (p *Planner) gatherRequirementsScanner(ctx context.Context) error {
 
 // generateDocuments runs the autonomous Phase 2 document generation pipeline.
 func (p *Planner) generateDocuments(ctx context.Context) error {
-	fmt.Fprintln(p.output)
-	fmt.Fprintln(p.output, "Generating planning documents...")
-	fmt.Fprintln(p.output)
+	fmt.Fprint(p.output, ui.Step("Generating planning documents..."))
 
 	for i, step := range planSteps {
 		stepNum := i + 1
 
 		if ctx.Err() != nil {
 			fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step %d/%d", stepNum, len(planSteps))))
-			fmt.Fprintf(p.output, "  Files written so far are preserved in %s\n", p.tasksDir)
+			fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
 			return ctx.Err()
 		}
 
@@ -273,7 +269,7 @@ func (p *Planner) generateDocuments(ctx context.Context) error {
 			// Check if this is a context cancellation.
 			if ctx.Err() != nil {
 				fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step %d/%d", stepNum, len(planSteps))))
-				fmt.Fprintf(p.output, "  Files written so far are preserved in %s\n", p.tasksDir)
+				fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
 				return ctx.Err()
 			}
 

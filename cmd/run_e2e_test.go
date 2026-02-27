@@ -346,6 +346,29 @@ func TestE2E_ShowStateWithSession(t *testing.T) {
 	assert.Contains(t, outputStr, "step 5/10")
 }
 
+// Test: --show-state with session but no state file outputs "No state file exists".
+func TestE2E_ShowStateNoStateFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	binPath := buildSnap(t)
+	projectDir := t.TempDir()
+	ctx := context.Background()
+
+	// Create session without state.json.
+	tasksDir := filepath.Join(projectDir, ".snap", "sessions", "auth", "tasks")
+	require.NoError(t, os.MkdirAll(tasksDir, 0o755))
+
+	run := exec.CommandContext(ctx, binPath, "run", "auth", "--show-state")
+	run.Dir = projectDir
+	output, err := run.CombinedOutput()
+	require.NoError(t, err, "snap run auth --show-state failed: %s", output)
+
+	outputStr := string(output)
+	assert.Contains(t, outputStr, "No state file exists")
+}
+
 // Test: --fresh with session-scoped state resets the session state.
 func TestE2E_FreshWithSessionState(t *testing.T) {
 	if testing.Short() {

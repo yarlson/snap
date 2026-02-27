@@ -462,15 +462,15 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 		if r.snapshotter != nil && !strings.Contains(step.name, "Commit") {
 			snapMsg := fmt.Sprintf("snap: %s step %d/%d — %s", taskLabel, stepNum, totalSteps, step.name)
 			if created, snapErr := r.snapshotter.Capture(ctx, snapMsg); snapErr != nil {
-				fmt.Fprintf(r.output, "  snapshot skipped: %v\n", snapErr)
+				fmt.Fprint(r.output, ui.Info(fmt.Sprintf("  snapshot skipped: %v", snapErr)))
 			} else if created {
-				fmt.Fprintln(r.output, "  snapshot saved")
+				fmt.Fprint(r.output, ui.Info("  snapshot saved"))
 			}
 		}
 
 		// Drain queued user prompts between steps.
 		if errs := DrainQueue(ctx, r.output, r.stepRunner, r.promptQueue); len(errs) > 0 {
-			fmt.Fprintf(os.Stderr, "%d queued prompt(s) failed\n", len(errs))
+			fmt.Fprint(os.Stderr, ui.DimError(fmt.Sprintf("%d queued prompt(s) failed", len(errs)))+"\n")
 		}
 
 		// Mark step complete and save state

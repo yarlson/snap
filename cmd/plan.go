@@ -103,9 +103,10 @@ func planRun(_ *cobra.Command, args []string) error {
 	}
 
 	// Print file listing after completion.
-	printFileListing(td)
+	printFileListing(planOutput, td)
 
-	fmt.Printf("\nRun: snap run %s\n", sessionName)
+	fmt.Print("\n")
+	fmt.Print(ui.Info(fmt.Sprintf("Run: snap run %s", sessionName)))
 
 	return nil
 }
@@ -148,7 +149,7 @@ func formatMultiplePlanSessionsError(sessions []session.Info) error {
 }
 
 // printFileListing prints all files found in the tasks directory.
-func printFileListing(tasksDir string) {
+func printFileListing(w io.Writer, tasksDir string) {
 	entries, err := os.ReadDir(tasksDir)
 	if err != nil {
 		return
@@ -166,8 +167,9 @@ func printFileListing(tasksDir string) {
 	}
 
 	sort.Strings(files)
-	fmt.Printf("\nFiles in %s:\n", tasksDir)
+	fmt.Fprint(w, "\n")
+	fmt.Fprint(w, ui.Info(fmt.Sprintf("Files in %s:", tasksDir)))
 	for _, f := range files {
-		fmt.Printf("  %s\n", f)
+		fmt.Fprint(w, ui.Info("  "+f))
 	}
 }
