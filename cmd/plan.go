@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -12,9 +13,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/yarlson/snap/internal/input"
 	"github.com/yarlson/snap/internal/plan"
 	"github.com/yarlson/snap/internal/provider"
 	"github.com/yarlson/snap/internal/session"
+	"github.com/yarlson/snap/internal/ui"
 )
 
 var fromFile string
@@ -47,7 +50,11 @@ func planRun(_ *cobra.Command, args []string) error {
 
 	// Read --from file if specified.
 	var opts []plan.PlannerOption
-	opts = append(opts, plan.WithOutput(os.Stdout), plan.WithInput(os.Stdin), plan.WithTerminal(os.Stdin))
+	var planOutput io.Writer = os.Stdout
+	if input.IsTerminal(os.Stdin) {
+		planOutput = ui.NewSwitchWriter(os.Stdout, ui.WithLFToCRLF())
+	}
+	opts = append(opts, plan.WithOutput(planOutput), plan.WithInput(os.Stdin), plan.WithTerminal(os.Stdin))
 
 	if fromFile != "" {
 		content, err := os.ReadFile(fromFile)
