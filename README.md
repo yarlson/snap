@@ -223,6 +223,45 @@ Files in .snap/sessions/auth-system/tasks:
 Run: snap run auth-system
 ```
 
+#### Status session
+
+```bash
+snap status [session]
+```
+
+Shows detailed status for a named session, including:
+
+- Session name and tasks directory path
+- List of all tasks with completion state (✓ = completed, ~ = in progress, ☐ = not started)
+- Current active task and step progress (if running)
+- Summary of remaining and completed tasks
+
+The `[session]` argument is optional. If not provided and exactly one session exists, snap automatically uses it. If multiple sessions exist, snap shows an error with a list of available sessions.
+
+Example:
+
+```bash
+# Show status for a specific session
+snap status auth-system
+
+# Or auto-detect single session
+snap status
+```
+
+Output example:
+
+```
+Session: auth-system
+Path:    .snap/sessions/auth-system/tasks
+
+Tasks:
+  [x] TASK1
+  [~] TASK2 (step 5/10: Apply fixes)
+  [ ] TASK3
+
+2 tasks remaining, 1 complete
+```
+
 #### Delete session
 
 ```bash
@@ -301,6 +340,9 @@ snap plan auth-feature --from requirements.md
 
 # List all sessions
 snap list
+
+# Show detailed status for a session
+snap status auth-feature
 
 # Run a specific session
 snap run auth-feature

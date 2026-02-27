@@ -378,3 +378,116 @@ func TestResolve_InvalidName(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid session name")
 }
+
+// --- Integration tests: HasPlanHistory / MarkPlanStarted ---
+
+func TestHasPlanHistory_WithoutMarker(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+
+	assert.False(t, HasPlanHistory(root, "auth"))
+}
+
+func TestHasPlanHistory_AfterMarkPlanStarted(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+
+	err := MarkPlanStarted(root, "auth")
+	require.NoError(t, err)
+
+	assert.True(t, HasPlanHistory(root, "auth"))
+}
+
+func TestMarkPlanStarted_Idempotent(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+
+	require.NoError(t, MarkPlanStarted(root, "auth"))
+	require.NoError(t, MarkPlanStarted(root, "auth"))
+
+	assert.True(t, HasPlanHistory(root, "auth"))
+}
+
+// --- Integration tests: Status ---
+
+func TestStatus_WithTasksAndActiveStep(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+
+	// Add 3 task files.
+	td := TasksDir(root, "auth")
+	require.NoError(t, os.WriteFile(filepath.Join(td, "TASK1.md"), []byte("# Task 1\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, "TASK2.md"), []byte("# Task 2\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, "TASK3.md"), []byte("# Task 3\n"), 0o600))
+
+	// Write state: TASK1 completed, TASK2 active at step 5.
+	stateJSON := `{
+		"tasks_dir": "tasks",
+		"current_task_id": "TASK2",
+		"current_task_file": "TASK2.md",
+		"current_step": 5,
+		"total_steps": 10,
+		"completed_task_ids": ["TASK1"],
+		"session_id": "",
+		"last_updated": "2025-01-01T00:00:00Z",
+		"prd_path": "tasks/PRD.md"
+	}`
+	sessionDir := Dir(root, "auth")
+	require.NoError(t, os.WriteFile(filepath.Join(sessionDir, "state.json"), []byte(stateJSON), 0o600))
+
+	st, err := Status(root, "auth")
+	require.NoError(t, err)
+
+	assert.Equal(t, "auth", st.Name)
+	assert.Equal(t, td, st.TasksDir)
+	require.Len(t, st.Tasks, 3)
+	assert.Equal(t, "TASK1", st.Tasks[0].ID)
+	assert.True(t, st.Tasks[0].Completed)
+	assert.Equal(t, "TASK2", st.Tasks[1].ID)
+	assert.False(t, st.Tasks[1].Completed)
+	assert.Equal(t, "TASK3", st.Tasks[2].ID)
+	assert.False(t, st.Tasks[2].Completed)
+	assert.Equal(t, "TASK2", st.ActiveTask)
+	assert.Equal(t, 5, st.ActiveStep)
+	assert.Equal(t, 10, st.TotalSteps)
+}
+
+func TestStatus_NoTasks(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+
+	st, err := Status(root, "auth")
+	require.NoError(t, err)
+
+	assert.Equal(t, "auth", st.Name)
+	assert.Empty(t, st.Tasks)
+	assert.Empty(t, st.ActiveTask)
+	assert.Equal(t, 0, st.ActiveStep)
+}
+
+func TestStatus_NonexistentSession(t *testing.T) {
+	root := t.TempDir()
+
+	_, err := Status(root, "nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestStatus_MissingStateJSON(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+
+	// Add tasks but no state.json.
+	td := TasksDir(root, "auth")
+	require.NoError(t, os.WriteFile(filepath.Join(td, "TASK1.md"), []byte("# Task 1\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, "TASK2.md"), []byte("# Task 2\n"), 0o600))
+
+	st, err := Status(root, "auth")
+	require.NoError(t, err)
+
+	require.Len(t, st.Tasks, 2)
+	assert.False(t, st.Tasks[0].Completed)
+	assert.False(t, st.Tasks[1].Completed)
+	assert.Empty(t, st.ActiveTask)
+	assert.Equal(t, 0, st.ActiveStep)
+}

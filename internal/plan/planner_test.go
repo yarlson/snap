@@ -364,3 +364,127 @@ func TestPlanner_ExecutorError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "provider failed")
 }
+
+// --- Resume tests ---
+
+func TestPlanner_WithResume_FirstCallHasCFlag(t *testing.T) {
+	exec := &mockExecutor{}
+	var out bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("refine tasks\n/done\n")),
+		WithResume(true),
+	)
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	calls := exec.getCalls()
+	// First call (requirements prompt) should have -c because of resume.
+	require.GreaterOrEqual(t, len(calls), 1)
+	assert.Contains(t, calls[0].args, "-c", "resume mode: first call should have -c")
+
+	output := out.String()
+	assert.Contains(t, output, "Resuming planning")
+}
+
+func TestPlanner_WithoutResume_FirstCallNoCFlag(t *testing.T) {
+	exec := &mockExecutor{}
+	var out bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("/done\n")),
+		WithResume(false),
+	)
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	calls := exec.getCalls()
+	// First call (requirements prompt) should NOT have -c (fresh start).
+	require.GreaterOrEqual(t, len(calls), 1)
+	assert.NotContains(t, calls[0].args, "-c", "fresh mode: first call should not have -c")
+
+	output := out.String()
+	assert.NotContains(t, output, "Resuming planning")
+}
+
+// --- AfterFirstMessage callback tests ---
+
+func TestPlanner_AfterFirstMessage_CalledOnSuccess(t *testing.T) {
+	exec := &mockExecutor{}
+	var out bytes.Buffer
+	var callbackCalled bool
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("/done\n")),
+		WithAfterFirstMessage(func() error {
+			callbackCalled = true
+			return nil
+		}),
+	)
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+	assert.True(t, callbackCalled, "afterFirstMessage should be called after first successful message")
+}
+
+func TestPlanner_AfterFirstMessage_NotCalledOnFailure(t *testing.T) {
+	exec := &mockExecutor{err: fmt.Errorf("provider failed")}
+	var out bytes.Buffer
+	var callbackCalled bool
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("/done\n")),
+		WithAfterFirstMessage(func() error {
+			callbackCalled = true
+			return nil
+		}),
+	)
+
+	err := p.Run(context.Background())
+	require.Error(t, err)
+	assert.False(t, callbackCalled, "afterFirstMessage should NOT be called when first message fails")
+}
+
+func TestPlanner_AfterFirstMessage_CalledOnceOnly(t *testing.T) {
+	exec := &mockExecutor{}
+	var out bytes.Buffer
+	callCount := 0
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("msg1\nmsg2\n/done\n")),
+		WithAfterFirstMessage(func() error {
+			callCount++
+			return nil
+		}),
+	)
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 1, callCount, "afterFirstMessage should be called exactly once")
+}
+
+func TestPlanner_AfterFirstMessage_WithBrief(t *testing.T) {
+	exec := &mockExecutor{}
+	var out bytes.Buffer
+	var callbackCalled bool
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithBrief("brief.md", "some brief"),
+		WithAfterFirstMessage(func() error {
+			callbackCalled = true
+			return nil
+		}),
+	)
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+	assert.True(t, callbackCalled, "afterFirstMessage should be called in --from mode too")
+}

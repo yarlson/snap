@@ -64,11 +64,15 @@ func planRun(_ *cobra.Command, args []string) error {
 
 	td := session.TasksDir(".", sessionName)
 
-	// Write .plan-started marker for session status tracking.
-	markerPath := filepath.Join(session.Dir(".", sessionName), ".plan-started")
-	if err := os.WriteFile(markerPath, []byte(""), 0o600); err != nil {
-		return fmt.Errorf("failed to write plan marker: %w", err)
-	}
+	// Check if this is a resume (marker already exists) or fresh start.
+	// Create .plan-started marker after first successful message (not before).
+	resumePlan := session.HasPlanHistory(".", sessionName)
+	opts = append(opts,
+		plan.WithResume(resumePlan),
+		plan.WithAfterFirstMessage(func() error {
+			return session.MarkPlanStarted(".", sessionName)
+		}),
+	)
 
 	planner := plan.NewPlanner(executor, sessionName, td, opts...)
 

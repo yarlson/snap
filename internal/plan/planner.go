@@ -29,13 +29,16 @@ var planSteps = []planStep{
 
 // Planner orchestrates the two-phase planning pipeline.
 type Planner struct {
-	executor    workflow.Executor
-	sessionName string
-	tasksDir    string
-	output      io.Writer
-	input       io.Reader
-	briefFile   string // filename for display (e.g., "brief.md")
-	briefBody   string // file content
+	executor          workflow.Executor
+	sessionName       string
+	tasksDir          string
+	output            io.Writer
+	input             io.Reader
+	briefFile         string       // filename for display (e.g., "brief.md")
+	briefBody         string       // file content
+	resume            bool         // when true, first executor call uses -c to continue previous conversation
+	afterFirstMessage func() error // called once after the first successful executor call
+	firstMessageDone  bool
 }
 
 // PlannerOption configures a Planner.
@@ -49,6 +52,17 @@ func WithOutput(w io.Writer) PlannerOption {
 // WithInput sets the input reader for Phase 1.
 func WithInput(r io.Reader) PlannerOption {
 	return func(p *Planner) { p.input = r }
+}
+
+// WithResume sets whether to resume a previous planning conversation.
+// When true, the first executor call uses -c for conversation continuity.
+func WithResume(resume bool) PlannerOption {
+	return func(p *Planner) { p.resume = resume }
+}
+
+// WithAfterFirstMessage sets a callback that fires once after the first successful executor call.
+func WithAfterFirstMessage(fn func() error) PlannerOption {
+	return func(p *Planner) { p.afterFirstMessage = fn }
 }
 
 // WithBrief sets the brief file content, skipping Phase 1.
@@ -74,12 +88,24 @@ func NewPlanner(executor workflow.Executor, sessionName, tasksDir string, opts .
 	return p
 }
 
+// onFirstMessage fires the afterFirstMessage callback once after the first successful executor call.
+func (p *Planner) onFirstMessage() error {
+	if p.firstMessageDone || p.afterFirstMessage == nil {
+		return nil
+	}
+	p.firstMessageDone = true
+	return p.afterFirstMessage()
+}
+
 // Run orchestrates the full planning pipeline: Phase 1 (requirements gathering)
 // followed by Phase 2 (autonomous document generation).
 func (p *Planner) Run(ctx context.Context) error {
-	if p.briefBody != "" {
+	switch {
+	case p.briefBody != "":
 		fmt.Fprintf(p.output, "Planning session '%s' — using %s as input\n", p.sessionName, p.briefFile)
-	} else {
+	case p.resume:
+		fmt.Fprintf(p.output, "Resuming planning for session '%s'\n", p.sessionName)
+	default:
 		fmt.Fprintf(p.output, "Planning session '%s'\n", p.sessionName)
 	}
 
@@ -104,9 +130,19 @@ func (p *Planner) gatherRequirements(ctx context.Context) error {
 	fmt.Fprintln(p.output)
 
 	// Send the initial requirements-gathering prompt.
+	// When resuming, add -c flag to continue previous conversation.
 	prompt := RenderRequirementsPrompt()
-	if err := p.executor.Run(ctx, p.output, model.Thinking, prompt); err != nil {
+	var initArgs []string
+	if p.resume {
+		initArgs = append(initArgs, "-c")
+	}
+	initArgs = append(initArgs, prompt)
+	if err := p.executor.Run(ctx, p.output, model.Thinking, initArgs...); err != nil {
 		return fmt.Errorf("requirements prompt failed: %w", err)
+	}
+
+	if err := p.onFirstMessage(); err != nil {
+		return err
 	}
 
 	// Chat loop: read user input, send with -c, repeat until /done or EOF.
@@ -192,6 +228,10 @@ func (p *Planner) generateDocuments(ctx context.Context) error {
 			}
 
 			return fmt.Errorf("step %d/%d %q failed: %w", stepNum, len(planSteps), step.name, err)
+		}
+
+		if err := p.onFirstMessage(); err != nil {
+			return err
 		}
 
 		elapsed := time.Since(start)

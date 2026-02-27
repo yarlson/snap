@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 )
 
 var namePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
@@ -64,6 +65,9 @@ func sessionsDir(projectRoot string) string {
 
 // taskFileRegex matches TASK<n>.md filenames (uppercase only).
 var taskFileRegex = regexp.MustCompile(`^TASK\d+\.md$`)
+
+// statusTaskRegex matches TASK<n>.md filenames with capture group for the numeric part.
+var statusTaskRegex = regexp.MustCompile(`^TASK(\d+)\.md$`)
 
 // List scans .snap/sessions/ and returns info for each session, sorted by name.
 func List(projectRoot string) ([]Info, error) {
@@ -129,9 +133,11 @@ func List(projectRoot string) ([]Info, error) {
 }
 
 // sessionState is a minimal struct to read state.json fields needed for status derivation.
+// Note: Keep fields in sync with internal/state/types.go State struct.
 type sessionState struct {
 	CurrentTaskID    string   `json:"current_task_id"`
 	CurrentStep      int      `json:"current_step"`
+	TotalSteps       int      `json:"total_steps"`
 	CompletedTaskIDs []string `json:"completed_task_ids"`
 }
 
@@ -175,6 +181,112 @@ func Resolve(projectRoot, name string) (string, error) {
 		return "", fmt.Errorf("session '%s' not found — create it with: snap new %s", name, name)
 	}
 	return Dir(projectRoot, name), nil
+}
+
+// HasPlanHistory checks whether a session has a .plan-started marker file.
+func HasPlanHistory(projectRoot, name string) bool {
+	markerPath := filepath.Join(Dir(projectRoot, name), ".plan-started")
+	_, err := os.Stat(markerPath)
+	return err == nil
+}
+
+// MarkPlanStarted creates the .plan-started marker file in the session directory.
+func MarkPlanStarted(projectRoot, name string) error {
+	markerPath := filepath.Join(Dir(projectRoot, name), ".plan-started")
+	return os.WriteFile(markerPath, []byte(""), 0o600)
+}
+
+// TaskStatus describes one task file's completion state.
+type TaskStatus struct {
+	ID        string
+	Completed bool
+}
+
+// StatusInfo holds detailed information about a session.
+type StatusInfo struct {
+	Name       string
+	TasksDir   string
+	Tasks      []TaskStatus
+	ActiveTask string
+	ActiveStep int
+	TotalSteps int
+}
+
+// Status returns detailed status for a named session.
+func Status(projectRoot, name string) (*StatusInfo, error) {
+	if _, err := Resolve(projectRoot, name); err != nil {
+		return nil, err
+	}
+
+	td := TasksDir(projectRoot, name)
+	sessionDir := Dir(projectRoot, name)
+
+	// Scan task files.
+	entries, err := os.ReadDir(td)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("read tasks directory: %w", err)
+	}
+
+	type taskEntry struct {
+		id     string
+		number int
+	}
+	var tasks []taskEntry
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		matches := statusTaskRegex.FindStringSubmatch(entry.Name())
+		if matches == nil {
+			continue
+		}
+		num, err := strconv.Atoi(matches[1])
+		if err != nil {
+			continue
+		}
+		id := fmt.Sprintf("TASK%s", matches[1])
+		tasks = append(tasks, taskEntry{id: id, number: num})
+	}
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].number < tasks[j].number
+	})
+
+	// Read state.json for completion info.
+	statePath := filepath.Join(sessionDir, "state.json")
+	var st *sessionState
+	if stateData, stateErr := os.ReadFile(statePath); stateErr == nil {
+		var parsed sessionState
+		if json.Unmarshal(stateData, &parsed) == nil {
+			st = &parsed
+		}
+	}
+
+	completedSet := make(map[string]bool)
+	if st != nil {
+		for _, id := range st.CompletedTaskIDs {
+			completedSet[id] = true
+		}
+	}
+
+	result := &StatusInfo{
+		Name:     name,
+		TasksDir: td,
+	}
+
+	for _, t := range tasks {
+		result.Tasks = append(result.Tasks, TaskStatus{
+			ID:        t.id,
+			Completed: completedSet[t.id],
+		})
+	}
+
+	if st != nil && st.CurrentTaskID != "" {
+		result.ActiveTask = st.CurrentTaskID
+		result.ActiveStep = st.CurrentStep
+		result.TotalSteps = st.TotalSteps
+	}
+
+	return result, nil
 }
 
 // Delete removes a session directory and all its contents.
