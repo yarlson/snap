@@ -37,15 +37,16 @@ go build -o snap .
 
 ## Quickstart
 
-1. Initialize your snap project:
+1. Create a new session and plan your tasks:
 
 ```bash
-snap init
+snap new my-project
+snap plan my-project
 ```
 
-This scaffolds your project with template PRD and task files in `docs/tasks/`.
+This creates a session and guides you through planning your PRD, design, and task files.
 
-2. Edit your PRD (`docs/tasks/PRD.md`):
+2. Alternatively, if you prefer to manually create task files in the default location (`docs/tasks/`), create your PRD (`docs/tasks/PRD.md`):
 
 ```markdown
 # My Feature Set
@@ -111,27 +112,6 @@ Runs the task-by-task implementation workflow. By default, reads tasks from `doc
 **Auto-detection**: If no session name is provided and exactly one session exists, snap automatically uses it. If multiple sessions exist, snap shows an error with a list of available sessions.
 
 **Session example**: `snap run my-project` runs the session named `my-project` (files in `.snap/sessions/my-project/tasks/`).
-
-### Init subcommand
-
-```bash
-snap init [flags]
-```
-
-Scaffolds a new snap project with template PRD and task files. Safe to run multiple times—existing files are not overwritten. Creates:
-
-- `docs/tasks/PRD.md` (product requirements template)
-- `docs/tasks/TASK1.md` (first task template)
-
-Common usage:
-
-```bash
-# Initialize project in default location (docs/tasks)
-snap init
-
-# Initialize in custom directory
-snap init --tasks-dir ./features
-```
 
 ### Session management commands
 
@@ -301,12 +281,6 @@ snap delete <name> --force
 ### Examples
 
 ```bash
-# Initialize a new project with templates
-snap init
-
-# Initialize in custom directory
-snap init -d ./features
-
 # Run implementation workflow (default: docs/tasks)
 snap
 

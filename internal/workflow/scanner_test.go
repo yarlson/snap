@@ -279,7 +279,7 @@ func TestFormatTaskDirError(t *testing.T) {
 		got := FormatTaskDirError("docs/tasks", nil)
 		expected := "Error: no task files found in docs/tasks/\n\n" +
 			"snap looks for files named TASK1.md, TASK2.md, etc.\n\n" +
-			"To get started:\n  snap init"
+			"To get started:\n  snap new <session> && snap plan <session>"
 		assert.Equal(t, expected, got)
 	})
 
@@ -289,7 +289,7 @@ func TestFormatTaskDirError(t *testing.T) {
 		expected := "Error: no task files found in docs/tasks/\n\n" +
 			"snap looks for files named TASK1.md, TASK2.md, etc.\n" +
 			"Found: task1.md (rename to TASK1.md)\n\n" +
-			"To get started:\n  snap init"
+			"To get started:\n  snap new <session> && snap plan <session>"
 		assert.Equal(t, expected, got)
 	})
 
@@ -299,7 +299,7 @@ func TestFormatTaskDirError(t *testing.T) {
 		expected := "Error: no task files found in docs/tasks/\n\n" +
 			"snap looks for files named TASK1.md, TASK2.md, etc.\n" +
 			"PRD.md contains TASK headers, but snap needs separate files: TASK1.md, TASK2.md, etc.\n\n" +
-			"To get started:\n  snap init"
+			"To get started:\n  snap new <session> && snap plan <session>"
 		assert.Equal(t, expected, got)
 	})
 
@@ -313,7 +313,7 @@ func TestFormatTaskDirError(t *testing.T) {
 			"snap looks for files named TASK1.md, TASK2.md, etc.\n" +
 			"Found: task1.md (rename to TASK1.md)\n" +
 			"Found: Task2.md (rename to TASK2.md)\n\n" +
-			"To get started:\n  snap init"
+			"To get started:\n  snap new <session> && snap plan <session>"
 		assert.Equal(t, expected, got)
 	})
 }

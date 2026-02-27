@@ -117,7 +117,7 @@ func FormatTaskDirError(dir string, hints []string) string {
 		b.WriteString("\n")
 		b.WriteString(hint)
 	}
-	b.WriteString("\n\nTo get started:\n  snap init")
+	b.WriteString("\n\nTo get started:\n  snap new <session> && snap plan <session>")
 	return b.String()
 }
 

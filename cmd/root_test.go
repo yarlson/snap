@@ -514,7 +514,7 @@ func TestE2E_TaskFileErrorRecovery_CaseMismatch(t *testing.T) {
 	outputStr := string(output)
 	assert.Contains(t, outputStr, "Found: task1.md")
 	assert.Contains(t, outputStr, "rename to TASK1.md")
-	assert.Contains(t, outputStr, "snap init")
+	assert.Contains(t, outputStr, "snap new <session>")
 }
 
 func TestCI_RunsLintAndRaceTests(t *testing.T) {
