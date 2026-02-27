@@ -26,6 +26,26 @@ That's it. `snap plan` walks you through requirements and generates task files. 
 - [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli) in your PATH (default provider)
 - Or: [Codex CLI](https://openai.com/index/introducing-codex/) with `SNAP_PROVIDER=codex`
 
+## Planning
+
+`snap plan` is an interactive session where you describe what you want to build. Chat about your requirements, type `/done`, and snap generates the full planning scaffold: PRD, technology decisions, design doc, and numbered task files.
+
+```bash
+snap new auth-system
+snap plan auth-system          # Chat about requirements, type /done when ready
+snap run auth-system           # Implements everything
+```
+
+Or skip the chat and feed a requirements file:
+
+```bash
+snap plan auth-system --from requirements.md
+```
+
+### Manual task files
+
+If you prefer full control, write task files directly in `docs/tasks/` and run `snap run`. Name them `TASK1.md`, `TASK2.md`, etc. (uppercase, numbered). Each should describe what to build, requirements, and acceptance criteria. See `example/` for a working sample.
+
 ## The workflow
 
 Each task goes through 10 steps. snap saves state after every step — interrupt anytime, resume exactly where you left off.
@@ -64,26 +84,6 @@ While snap works, type a directive and press Enter. It queues up and runs betwee
 ```
 
 You stay in control without breaking the flow.
-
-## Planning
-
-`snap plan` is an interactive session where you describe what you want to build. Chat about your requirements, type `/done`, and snap generates the full planning scaffold: PRD, technology decisions, design doc, and numbered task files.
-
-```bash
-snap new auth-system
-snap plan auth-system          # Chat about requirements, type /done when ready
-snap run auth-system           # Implements everything
-```
-
-Or skip the chat and feed a requirements file:
-
-```bash
-snap plan auth-system --from requirements.md
-```
-
-### Manual task files
-
-If you prefer full control, write task files directly in `docs/tasks/` and run `snap run`. Name them `TASK1.md`, `TASK2.md`, etc. (uppercase, numbered). Each should describe what to build, requirements, and acceptance criteria. See `example/` for a working sample.
 
 ## Commands
 
