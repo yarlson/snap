@@ -245,10 +245,10 @@ snap delete <name> --force
 
 #### Global flags (available on all commands)
 
-| Flag          | Short | Default      | Description                                     |
-| ------------- | ----- | ------------ | ----------------------------------------------- |
-| `--version`   |       |              | Show version and exit                           |
-| `--tasks-dir` | `-d`  | `docs/tasks` | Directory containing PRD and task files         |
+| Flag          | Short | Default      | Description                             |
+| ------------- | ----- | ------------ | --------------------------------------- |
+| `--version`   |       |              | Show version and exit                   |
+| `--tasks-dir` | `-d`  | `docs/tasks` | Directory containing PRD and task files |
 
 #### Workflow flags (for `snap` and `snap run`)
 
