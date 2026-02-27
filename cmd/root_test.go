@@ -634,3 +634,263 @@ func filterEnv(env []string, key string) []string {
 	}
 	return filtered
 }
+
+// releaseWorkflow is a minimal representation of the release GitHub Actions workflow.
+type releaseWorkflow struct {
+	On   releaseOn             `yaml:"on"`
+	Jobs map[string]releaseJob `yaml:"jobs"`
+}
+
+type releaseOn struct {
+	Push releasePush `yaml:"push"`
+}
+
+type releasePush struct {
+	Tags []string `yaml:"tags"`
+}
+
+type releaseJob struct {
+	Steps []releaseStep `yaml:"steps"`
+	Needs interface{}   `yaml:"needs"`
+}
+
+type releaseStep struct {
+	Uses string            `yaml:"uses"`
+	Run  string            `yaml:"run"`
+	With map[string]string `yaml:"with"`
+}
+
+func loadReleaseWorkflow(t *testing.T) releaseWorkflow {
+	t.Helper()
+	root := mustModuleRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml"))
+	require.NoError(t, err, ".github/workflows/release.yml must exist")
+
+	var wf releaseWorkflow
+	require.NoError(t, yaml.Unmarshal(data, &wf), "release.yml must be valid YAML")
+	return wf
+}
+
+func TestRelease_WorkflowExistsAndValid(t *testing.T) {
+	loadReleaseWorkflow(t) // fails if file missing or invalid YAML
+}
+
+func TestRelease_TriggersOnVersionTagPush(t *testing.T) {
+	wf := loadReleaseWorkflow(t)
+
+	assert.Contains(t, wf.On.Push.Tags, "v*", "release should trigger on v* tag push")
+}
+
+func TestRelease_RunsLintAndTestBeforeGoreleaser(t *testing.T) {
+	wf := loadReleaseWorkflow(t)
+
+	// There must be a release job that depends on lint and test jobs.
+	releaseJob, ok := wf.Jobs["release"]
+	require.True(t, ok, "release workflow must have a release job")
+
+	// Check that lint and test jobs exist.
+	_, hasLint := wf.Jobs["lint"]
+	assert.True(t, hasLint, "release workflow must have a lint job")
+	_, hasTest := wf.Jobs["test"]
+	assert.True(t, hasTest, "release workflow must have a test job")
+
+	// Release job must depend on lint and test.
+	needs := normalizeNeeds(releaseJob.Needs)
+	assert.Contains(t, needs, "lint", "release job must depend on lint")
+	assert.Contains(t, needs, "test", "release job must depend on test")
+}
+
+// normalizeNeeds converts the YAML needs field (string or []string) to []string.
+func normalizeNeeds(v interface{}) []string {
+	switch val := v.(type) {
+	case string:
+		return []string{val}
+	case []interface{}:
+		result := make([]string, 0, len(val))
+		for _, item := range val {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+func TestRelease_GoreleaserVersionPinned(t *testing.T) {
+	wf := loadReleaseWorkflow(t)
+
+	releaseJob, ok := wf.Jobs["release"]
+	require.True(t, ok, "release workflow must have a release job")
+
+	var goreleaserStep *releaseStep
+	for i, step := range releaseJob.Steps {
+		if strings.Contains(step.Uses, "goreleaser") {
+			goreleaserStep = &releaseJob.Steps[i]
+			break
+		}
+	}
+	require.NotNil(t, goreleaserStep, "release job must use goreleaser action")
+
+	// The action reference should be pinned to a version tag (e.g., "goreleaser/goreleaser-action@v6").
+	parts := strings.SplitN(goreleaserStep.Uses, "@", 2)
+	require.Len(t, parts, 2, "goreleaser action must have @version suffix")
+	assert.True(t, strings.HasPrefix(parts[1], "v"), "goreleaser action must be pinned to a version tag (e.g., @v6), got: @%s", parts[1])
+
+	// The goreleaser binary version must be explicitly pinned via with.version.
+	ver, ok := goreleaserStep.With["version"]
+	assert.True(t, ok, "goreleaser step must specify with.version")
+	assert.True(t, strings.HasPrefix(ver, "v"), "goreleaser version must be pinned (e.g., v2.8.2), got: %s", ver)
+}
+
+// goreleaserConfig is a minimal representation of .goreleaser.yaml.
+type goreleaserConfig struct {
+	Version  int               `yaml:"version"`
+	Builds   []goreleaserBuild `yaml:"builds"`
+	Archives []interface{}     `yaml:"archives"`
+}
+
+type goreleaserBuild struct {
+	Env     []string           `yaml:"env"`
+	Goos    []string           `yaml:"goos"`
+	Goarch  []string           `yaml:"goarch"`
+	Ldflags []string           `yaml:"ldflags"`
+	Targets []string           `yaml:"targets"`
+	Main    string             `yaml:"main"`
+	Binary  string             `yaml:"binary"`
+	Ignore  []goreleaserIgnore `yaml:"ignore"`
+}
+
+type goreleaserIgnore struct {
+	Goos   string `yaml:"goos"`
+	Goarch string `yaml:"goarch"`
+}
+
+func loadGoreleaserConfig(t *testing.T) goreleaserConfig {
+	t.Helper()
+	root := mustModuleRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, ".goreleaser.yaml"))
+	require.NoError(t, err, ".goreleaser.yaml must exist")
+
+	var cfg goreleaserConfig
+	require.NoError(t, yaml.Unmarshal(data, &cfg), ".goreleaser.yaml must be valid YAML")
+	return cfg
+}
+
+func TestGoreleaser_ConfigExistsAndValid(t *testing.T) {
+	loadGoreleaserConfig(t) // fails if file missing or invalid YAML
+}
+
+func TestGoreleaser_BuildTargets(t *testing.T) {
+	cfg := loadGoreleaserConfig(t)
+
+	require.NotEmpty(t, cfg.Builds, "goreleaser must have at least one build")
+	build := cfg.Builds[0]
+
+	assert.Contains(t, build.Goos, "linux", "must build for linux")
+	assert.Contains(t, build.Goos, "darwin", "must build for darwin")
+	assert.NotContains(t, build.Goos, "windows", "must not build for windows")
+
+	assert.Contains(t, build.Goarch, "amd64", "must build for amd64")
+	assert.Contains(t, build.Goarch, "arm64", "must build for arm64")
+}
+
+func TestGoreleaser_LdflagsInjectVersion(t *testing.T) {
+	cfg := loadGoreleaserConfig(t)
+
+	require.NotEmpty(t, cfg.Builds, "goreleaser must have at least one build")
+	build := cfg.Builds[0]
+
+	var hasVersionLdflag bool
+	for _, flag := range build.Ldflags {
+		if strings.Contains(flag, "cmd.Version") && strings.Contains(flag, "Version") {
+			hasVersionLdflag = true
+			break
+		}
+	}
+	assert.True(t, hasVersionLdflag, "ldflags must inject version into cmd.Version")
+}
+
+func TestGoreleaser_CheckPasses(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping goreleaser check in short mode")
+	}
+
+	goreleaserBin, err := exec.LookPath("goreleaser")
+	if err != nil {
+		t.Skip("goreleaser not installed, skipping goreleaser check")
+	}
+
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, goreleaserBin, "check")
+	cmd.Dir = mustModuleRoot(t)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "goreleaser check failed: %s", out)
+}
+
+func TestGoreleaser_SnapshotBuildSucceeds(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping goreleaser snapshot build in short mode")
+	}
+
+	goreleaserBin, err := exec.LookPath("goreleaser")
+	if err != nil {
+		t.Skip("goreleaser not installed, skipping snapshot build")
+	}
+
+	// Run in a temp directory to avoid polluting the working tree with artifacts.
+	moduleRoot := mustModuleRoot(t)
+	tmpDir := t.TempDir()
+
+	// Copy essential files to temp directory for the build.
+	for _, file := range []string{"go.mod", "go.sum", ".goreleaser.yaml", "main.go"} {
+		src := filepath.Join(moduleRoot, file)
+		dst := filepath.Join(tmpDir, file)
+		data, err := os.ReadFile(src)
+		require.NoError(t, err, "failed to read %s", file)
+		require.NoError(t, os.WriteFile(dst, data, 0o600), "failed to write %s", file)
+	}
+
+	// Copy cmd and internal directories.
+	for _, dir := range []string{"cmd", "internal"} {
+		src := filepath.Join(moduleRoot, dir)
+		dst := filepath.Join(tmpDir, dir)
+		require.NoError(t, copyDir(src, dst), "failed to copy %s directory", dir)
+	}
+
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, goreleaserBin, "build", "--snapshot", "--clean")
+	cmd.Dir = tmpDir
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "goreleaser build --snapshot --clean failed: %s", out)
+}
+
+// copyDir recursively copies a directory from src to dst.
+func copyDir(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+		if entry.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			data, err := os.ReadFile(srcPath)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(dstPath, data, 0o600); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
