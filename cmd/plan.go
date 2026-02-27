@@ -1,22 +1,162 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"sort"
+	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
+
+	"github.com/yarlson/snap/internal/plan"
+	"github.com/yarlson/snap/internal/provider"
+	"github.com/yarlson/snap/internal/session"
 )
 
+var fromFile string
+
 var planCmd = &cobra.Command{
-	Use:           "plan <name>",
+	Use:           "plan [session]",
 	Short:         "Plan tasks for a session interactively",
-	Args:          cobra.ExactArgs(1),
+	Args:          cobra.MaximumNArgs(1),
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	RunE: func(_ *cobra.Command, _ []string) error {
-		return fmt.Errorf("not implemented")
-	},
+	RunE:          planRun,
 }
 
 func init() {
 	rootCmd.AddCommand(planCmd)
+	planCmd.Flags().StringVar(&fromFile, "from", "", "Input file to use instead of interactive requirements gathering")
+}
+
+func planRun(_ *cobra.Command, args []string) error {
+	sessionName, err := resolvePlanSession(args)
+	if err != nil {
+		return err
+	}
+
+	// Pre-flight: validate provider CLI is available in PATH.
+	providerName := provider.ResolveProviderName()
+	if err := provider.ValidateCLI(providerName); err != nil {
+		return err
+	}
+
+	// Read --from file if specified.
+	var opts []plan.PlannerOption
+	opts = append(opts, plan.WithOutput(os.Stdout), plan.WithInput(os.Stdin))
+
+	if fromFile != "" {
+		content, err := os.ReadFile(fromFile)
+		if err != nil {
+			return fmt.Errorf("failed to read input file: %w", err)
+		}
+		opts = append(opts, plan.WithBrief(filepath.Base(fromFile), string(content)))
+	}
+
+	executor, err := provider.NewExecutorFromEnv()
+	if err != nil {
+		return err
+	}
+
+	td := session.TasksDir(".", sessionName)
+
+	// Write .plan-started marker for session status tracking.
+	markerPath := filepath.Join(session.Dir(".", sessionName), ".plan-started")
+	if err := os.WriteFile(markerPath, []byte(""), 0o600); err != nil {
+		return fmt.Errorf("failed to write plan marker: %w", err)
+	}
+
+	planner := plan.NewPlanner(executor, sessionName, td, opts...)
+
+	// Set up signal handling.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+
+	if err := planner.Run(ctx); err != nil {
+		if ctx.Err() != nil {
+			// Signal-initiated cancellation — planner already printed abort message.
+			return ctx.Err()
+		}
+		return err
+	}
+
+	// Print file listing after completion.
+	printFileListing(td)
+
+	fmt.Printf("\nRun: snap run %s\n", sessionName)
+
+	return nil
+}
+
+// resolvePlanSession resolves the session name for the plan command.
+func resolvePlanSession(args []string) (string, error) {
+	if len(args) > 0 {
+		name := args[0]
+		if _, err := session.Resolve(".", name); err != nil {
+			return "", err
+		}
+		return name, nil
+	}
+
+	// Auto-detect: exactly one session → use it.
+	sessions, err := session.List(".")
+	if err != nil {
+		return "", fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	switch len(sessions) {
+	case 0:
+		return "", fmt.Errorf("no sessions found\n\nTo create a session:\n  snap new <name>")
+	case 1:
+		return sessions[0].Name, nil
+	default:
+		return "", formatMultiplePlanSessionsError(sessions)
+	}
+}
+
+// formatMultiplePlanSessionsError builds an error message listing available sessions for plan.
+func formatMultiplePlanSessionsError(sessions []session.Info) error {
+	var b strings.Builder
+	b.WriteString("Error: multiple sessions found\n\nAvailable sessions:\n")
+	for _, s := range sessions {
+		fmt.Fprintf(&b, "  %-12s  %s\n", s.Name, formatTaskSummary(s.TaskCount, s.CompletedCount))
+	}
+	b.WriteString("\nSpecify a session:\n  snap plan <name>")
+	return fmt.Errorf("%s", b.String())
+}
+
+// printFileListing prints all files found in the tasks directory.
+func printFileListing(tasksDir string) {
+	entries, err := os.ReadDir(tasksDir)
+	if err != nil {
+		return
+	}
+
+	var files []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			files = append(files, entry.Name())
+		}
+	}
+
+	if len(files) == 0 {
+		return
+	}
+
+	sort.Strings(files)
+	fmt.Printf("\nFiles in %s:\n", tasksDir)
+	for _, f := range files {
+		fmt.Printf("  %s\n", f)
+	}
 }

@@ -156,7 +156,7 @@ func TestRunE2E_SubcommandWorks(t *testing.T) {
 		"snap run should invoke run logic")
 }
 
-func TestStubE2E_PlanNotImplemented(t *testing.T) {
+func TestStubE2E_PlanSessionNotFound(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping E2E test in short mode")
 	}
@@ -172,7 +172,8 @@ func TestStubE2E_PlanNotImplemented(t *testing.T) {
 	run := exec.CommandContext(ctx, binPath, "plan", "test-session")
 	output, runErr := run.CombinedOutput()
 	require.Error(t, runErr)
-	assert.Contains(t, string(output), "not implemented")
+	assert.Contains(t, string(output), "not found")
+	assert.Contains(t, string(output), "snap new test-session")
 }
 
 // CUJ-6: Session Cleanup — E2E test covering create → list → delete → list.

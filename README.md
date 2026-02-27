@@ -177,10 +177,51 @@ Sessions are sorted alphabetically by name.
 #### Plan session
 
 ```bash
-snap plan <name>
+snap plan [session]
+snap plan [session] --from <file>
 ```
 
-Interactively plan tasks for a session. (Currently not implemented.)
+Interactively plan tasks for a session using a two-phase pipeline:
+
+- **Phase 1 (Interactive)**: Chat with Claude to gather requirements. Type `/done` to move to Phase 2.
+- **Phase 2 (Autonomous)**: Claude generates planning documents (PRD, TECHNOLOGY, DESIGN, task files) based on your requirements.
+
+The `[session]` argument is optional. If not provided and exactly one session exists, snap automatically uses it. If multiple sessions exist, snap shows an error with a list of available sessions.
+
+**With `--from` flag**: Skip Phase 1 (interactive gathering) and provide requirements from a file instead:
+
+```bash
+snap plan auth --from requirements.md
+```
+
+Example:
+
+```bash
+# Create a new session
+snap new auth-system
+
+# Plan the session interactively
+snap plan auth-system
+
+# Or plan with input from a file
+snap plan auth-system --from brief.md
+
+# Or auto-detect single session (if only one exists)
+snap plan
+```
+
+After planning completes, snap lists the generated files and shows the next step to run the session:
+
+```
+Files in .snap/sessions/auth-system/tasks:
+  PRD.md
+  TECHNOLOGY.md
+  DESIGN.md
+  TASK1.md
+  TASK2.md
+
+Run: snap run auth-system
+```
 
 #### Delete session
 
@@ -250,6 +291,11 @@ snap --show-state --json
 
 # Create a new session
 snap new auth-feature
+
+# Plan the session (interactive or with file)
+snap plan auth-feature
+# Or with input from a file (skips interactive phase)
+snap plan auth-feature --from requirements.md
 
 # Add tasks to .snap/sessions/auth-feature/tasks/TASK1.md, TASK2.md, ...
 
