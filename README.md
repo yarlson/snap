@@ -1,8 +1,8 @@
 # snap
 
-Write tasks. Run snap. Get committed code.
+Describe what you want. Get committed code.
 
-snap is a CLI that turns task specs into tested, reviewed, committed code — autonomously. It orchestrates an AI coding agent through a structured 10-step workflow per task: implement, test, review, fix, commit. No babysitting. No copy-pasting prompts. Just `snap run` and come back to clean commits.
+snap is a CLI that takes your requirements, breaks them into tasks, and implements each one autonomously — tested, reviewed, and committed. Describe a feature, `snap plan`, `snap run`, come back to clean commits. No babysitting. No copy-pasting prompts.
 
 ## Quickstart
 
@@ -65,43 +65,25 @@ While snap works, type a directive and press Enter. It queues up and runs betwee
 
 You stay in control without breaking the flow.
 
-## Two ways to set up tasks
+## Planning
 
-### Let snap plan (recommended)
+`snap plan` is an interactive session where you describe what you want to build. Chat about your requirements, type `/done`, and snap generates the full planning scaffold: PRD, technology decisions, design doc, and numbered task files.
 
 ```bash
 snap new auth-system
-snap plan auth-system          # Interactive: chat about requirements, type /done
-snap run auth-system
+snap plan auth-system          # Chat about requirements, type /done when ready
+snap run auth-system           # Implements everything
 ```
 
-snap generates PRD, technology decisions, design doc, and numbered task files — then implements them all.
-
-You can also feed requirements from a file:
+Or skip the chat and feed a requirements file:
 
 ```bash
 snap plan auth-system --from requirements.md
 ```
 
-### Write tasks yourself
+### Manual task files
 
-Drop markdown files in `docs/tasks/`:
-
-```
-docs/tasks/
-├── PRD.md           # Context and overview (optional)
-├── TASK1.md         # First task spec
-├── TASK2.md         # Second task spec
-└── TASK3.md         # ...
-```
-
-Then run:
-
-```bash
-snap run
-```
-
-Task files are `TASK1.md`, `TASK2.md`, etc. (uppercase, numbered). Each should describe what to build, requirements, and acceptance criteria. See `example/` for a working sample.
+If you prefer full control, write task files directly in `docs/tasks/` and run `snap run`. Name them `TASK1.md`, `TASK2.md`, etc. (uppercase, numbered). Each should describe what to build, requirements, and acceptance criteria. See `example/` for a working sample.
 
 ## Commands
 
