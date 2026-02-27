@@ -24,7 +24,8 @@ but
 /snap
 
 # State management
-.snap/
+.snap/*
+!.snap/.gitignore
 /docs/tasks/
 /.memory/
 /docs/plan/
