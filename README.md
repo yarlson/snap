@@ -160,7 +160,15 @@ snap --tasks-dir .snap/sessions/auth-system/tasks
 snap list
 ```
 
-Lists all named sessions in the current project. (Currently not implemented.)
+Lists all named sessions in the current project with a summary of tasks and progress:
+
+```
+  auth       2 tasks (1 done)  paused at step 5
+  api        0 tasks           planning
+  cleanup    1 task            complete
+```
+
+Sessions are sorted alphabetically by name.
 
 #### Plan session
 
@@ -176,7 +184,17 @@ Interactively plan tasks for a session. (Currently not implemented.)
 snap delete <name>
 ```
 
-Deletes a session and all its files. (Currently not implemented.)
+Deletes a session and all its files. By default, prompts for confirmation before deletion:
+
+```
+Delete session 'auth' and all its files? (y/N)
+```
+
+To skip the confirmation prompt and force deletion, use the `--force` flag:
+
+```bash
+snap delete <name> --force
+```
 
 ### Flags
 
@@ -231,8 +249,17 @@ snap new auth-feature
 
 # Add tasks to .snap/sessions/auth-feature/tasks/TASK1.md, TASK2.md, ...
 
+# List all sessions
+snap list
+
 # Run the session workflow
 snap --tasks-dir .snap/sessions/auth-feature/tasks
+
+# Delete a session (with confirmation)
+snap delete auth-feature
+
+# Force delete without confirmation
+snap delete auth-feature --force
 ```
 
 ### Show state output
