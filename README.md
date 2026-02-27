@@ -53,16 +53,16 @@ Each task goes through 10 steps. snap saves state after every step — interrupt
 ```
 TASK1.md ─┐
            │   ┌─────────────────────────────────────┐
-           ├──▶│  1. Implement feature                │ ◀─ Thinking model (deep)
-           │   │  2. Verify completeness              │ ◀─ Thinking model (deep)
-           │   │  3. Lint & test                      │
-           │   │  4. Code review                      │ ◀─ Thinking model (deep)
-           │   │  5. Apply fixes from review          │
-           │   │  6. Re-validate after fixes          │
-           │   │  7. Update docs                      │
-           │   │  8. Commit code                      │
-           │   │  9. Update memory vault              │
-           │   │ 10. Commit memory                    │
+           ├──▶│  1. Implement feature               │ ◀─ Thinking model (deep)
+           │   │  2. Verify completeness             │ ◀─ Thinking model (deep)
+           │   │  3. Lint & test                     │
+           │   │  4. Code review                     │ ◀─ Thinking model (deep)
+           │   │  5. Apply fixes from review         │
+           │   │  6. Re-validate after fixes         │
+           │   │  7. Update docs                     │
+           │   │  8. Commit code                     │
+           │   │  9. Update memory vault             │
+           │   │ 10. Commit memory                   │
            │   └──────────────────┬──────────────────┘
            │                      │
 TASK2.md ──┘                      ▼ next task
