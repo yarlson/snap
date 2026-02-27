@@ -51,7 +51,7 @@ If you prefer full control, write task files directly in `docs/tasks/` and run `
 Each task goes through 10 steps. snap saves state after every step — interrupt anytime, resume exactly where you left off.
 
 ```
-TASK1.md ─┐
+TASK1.md ──┐
            │   ┌─────────────────────────────────────┐
            ├──▶│  1. Implement feature               │ ◀─ Thinking model (deep)
            │   │  2. Verify completeness             │ ◀─ Thinking model (deep)
