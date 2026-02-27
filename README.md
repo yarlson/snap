@@ -83,17 +83,30 @@ snap
 
 snap implements TASK1, runs tests, reviews code, commits, then moves to TASK2. Press Ctrl+C to stop. Run `snap` again to resume.
 
+Alternatively, use sessions for named projects:
+
+```bash
+# Create a named session
+snap new my-project
+
+# Create task files in .snap/sessions/my-project/tasks/
+
+# Run the session
+snap --tasks-dir .snap/sessions/my-project/tasks
+```
+
 See `example/` for a complete working example.
 
 ## Usage
 
-### Main command
+### Main workflow command
 
 ```bash
 snap [flags]
+snap run [flags]
 ```
 
-Runs the task-by-task implementation workflow. By default, reads tasks from `docs/tasks/` and implements each task until stopped.
+Runs the task-by-task implementation workflow. Both commands are equivalent. By default, reads tasks from `docs/tasks/` and implements each task until stopped. Use `snap run` when you need explicit subcommand syntax (e.g., in scripts or CI/CD).
 
 ### Init subcommand
 
@@ -116,12 +129,68 @@ snap init
 snap init --tasks-dir ./features
 ```
 
+### Session management commands
+
+snap supports creating and managing named sessions. Each session has its own task directory and state, allowing you to work on multiple independent projects or features.
+
+#### New session
+
+```bash
+snap new <name>
+```
+
+Creates a new named session. The session directory is `.snap/sessions/<name>/tasks/`. After creation, you can add task files to this directory and run the workflow for that session.
+
+Example:
+
+```bash
+# Create a new session
+snap new auth-system
+
+# Add tasks to the session
+# Create files: .snap/sessions/auth-system/tasks/TASK1.md, TASK2.md, ...
+
+# Run the session workflow
+snap --tasks-dir .snap/sessions/auth-system/tasks
+```
+
+#### List sessions
+
+```bash
+snap list
+```
+
+Lists all named sessions in the current project. (Currently not implemented.)
+
+#### Plan session
+
+```bash
+snap plan <name>
+```
+
+Interactively plan tasks for a session. (Currently not implemented.)
+
+#### Delete session
+
+```bash
+snap delete <name>
+```
+
+Deletes a session and all its files. (Currently not implemented.)
+
 ### Flags
+
+#### Global flags (available on all commands)
+
+| Flag          | Short | Default      | Description                                     |
+| ------------- | ----- | ------------ | ----------------------------------------------- |
+| `--version`   |       |              | Show version and exit                           |
+| `--tasks-dir` | `-d`  | `docs/tasks` | Directory containing PRD and task files         |
+
+#### Workflow flags (for `snap` and `snap run`)
 
 | Flag           | Short | Default              | Description                                            |
 | -------------- | ----- | -------------------- | ------------------------------------------------------ |
-| `--version`    |       |                      | Show version and exit                                  |
-| `--tasks-dir`  | `-d`  | `docs/tasks`         | Directory containing PRD and task files (persistent)   |
 | `--prd`        | `-p`  | `<tasks-dir>/PRD.md` | Path to PRD file                                       |
 | `--fresh`      |       | `false`              | Ignore saved state and start fresh                     |
 | `--show-state` |       | `false`              | Display human-readable workflow state summary and exit |
@@ -139,6 +208,9 @@ snap init -d ./features
 # Run implementation workflow (default: docs/tasks)
 snap
 
+# Run with explicit subcommand (equivalent to `snap`)
+snap run
+
 # Run with custom tasks directory
 snap --tasks-dir ./features
 
@@ -153,6 +225,14 @@ snap --show-state
 
 # Show current workflow checkpoint as JSON
 snap --show-state --json
+
+# Create a new session
+snap new auth-feature
+
+# Add tasks to .snap/sessions/auth-feature/tasks/TASK1.md, TASK2.md, ...
+
+# Run the session workflow
+snap --tasks-dir .snap/sessions/auth-feature/tasks
 ```
 
 ### Show state output
@@ -264,7 +344,7 @@ Press Enter with no text to see what's queued.
 
 ## Project structure
 
-snap expects this layout:
+snap expects this layout for the default workflow:
 
 ```
 your-project/
@@ -276,6 +356,24 @@ your-project/
 ├── .memory/          # Optional: project context for Claude
 └── .snap/
     └── state.json    # Auto-managed workflow checkpoint
+```
+
+For session-based workflows, snap creates:
+
+```
+your-project/
+├── .snap/
+│   ├── sessions/
+│   │   ├── <session-name>/
+│   │   │   ├── tasks/
+│   │   │   │   ├── PRD.md
+│   │   │   │   ├── TASK1.md
+│   │   │   │   └── ...
+│   │   │   └── state.json   # Session-specific state
+│   │   ├── <another-session>/
+│   │   │   └── ...
+│   │   └── .gitignore       # Sessions dir is git-ignored
+│   └── state.json           # Global workflow checkpoint
 ```
 
 **Task files**: Name them `TASK1.md`, `TASK2.md`, etc. snap discovers and implements them in order.
