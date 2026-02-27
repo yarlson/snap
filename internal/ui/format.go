@@ -332,6 +332,52 @@ func FormatStartupSummary(tasksDir, provider string, taskCount, doneCount int, a
 		tasksDir, provider, taskCount, noun, doneCount, action)
 }
 
+// KeyValue renders a key-value pair. Key in bold, value in normal weight,
+// colon-separated, newline-terminated.
+func KeyValue(key, value string) string {
+	styleCode := ResolveStyle(WeightBold)
+	resetCode := ResolveStyle(WeightNormal)
+	return fmt.Sprintf("%s%s:%s %s\n", styleCode, StripColors(key), resetCode, StripColors(value))
+}
+
+// TaskDone renders a completed checklist item. [x] in success color + bold,
+// text dimmed, 2-space indent, newline-terminated.
+func TaskDone(text string) string {
+	sanitized := StripColors(text)
+	colorCode := ResolveColor(ColorSuccess)
+	styleCode := ResolveStyle(WeightBold)
+	dimCode := ResolveStyle(WeightDim)
+	resetCode := ResolveStyle(WeightNormal)
+	return fmt.Sprintf("  %s%s[x]%s %s%s%s\n",
+		styleCode, colorCode, resetCode, dimCode, sanitized, resetCode)
+}
+
+// TaskPending renders a pending checklist item. Entire line dimmed,
+// 2-space indent, newline-terminated.
+func TaskPending(text string) string {
+	sanitized := StripColors(text)
+	dimCode := ResolveStyle(WeightDim)
+	resetCode := ResolveStyle(WeightNormal)
+	return fmt.Sprintf("  %s[ ] %s%s\n", dimCode, sanitized, resetCode)
+}
+
+// TaskActive renders an in-progress checklist item. [~] in secondary color + bold,
+// text normal, suffix in dimmed parentheses. If suffix is empty, no parentheses.
+// 2-space indent, newline-terminated.
+func TaskActive(text, suffix string) string {
+	sanitized := StripColors(text)
+	colorCode := ResolveColor(ColorSecondary)
+	styleCode := ResolveStyle(WeightBold)
+	dimCode := ResolveStyle(WeightDim)
+	resetCode := ResolveStyle(WeightNormal)
+	suffixPart := ""
+	if suffix != "" {
+		suffixPart = fmt.Sprintf(" %s(%s)%s", dimCode, StripColors(suffix), resetCode)
+	}
+	return fmt.Sprintf("  %s%s[~]%s %s%s\n",
+		styleCode, colorCode, resetCode, sanitized, suffixPart)
+}
+
 // StripColors removes ANSI escape sequences from a string (useful for testing and sanitization).
 func StripColors(s string) string {
 	// Match all ANSI escape sequences:

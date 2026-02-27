@@ -492,3 +492,37 @@ func TestStepNumbered_WithColor_HasEscapeSequences(t *testing.T) {
 	assert.Contains(t, result, "\033[", "output should contain ANSI escape sequences when colors enabled")
 	assert.Contains(t, result, "Step 3/10", "output should contain step numbering")
 }
+
+func TestKeyValue(t *testing.T) {
+	result := ui.StripColors(ui.KeyValue("Session", "auth"))
+	assert.Equal(t, "Session: auth\n", result)
+}
+
+func TestKeyValue_EmptyValue(t *testing.T) {
+	result := ui.StripColors(ui.KeyValue("Session", ""))
+	assert.Equal(t, "Session: \n", result)
+}
+
+func TestTaskDone(t *testing.T) {
+	result := ui.StripColors(ui.TaskDone("TASK1"))
+	assert.Equal(t, "  [x] TASK1\n", result)
+	assert.True(t, strings.HasPrefix(result, "  [x]"), "TaskDone should start with 2-space indent and [x]")
+}
+
+func TestTaskPending(t *testing.T) {
+	result := ui.StripColors(ui.TaskPending("TASK3"))
+	assert.Equal(t, "  [ ] TASK3\n", result)
+	assert.True(t, strings.HasPrefix(result, "  [ ]"), "TaskPending should start with 2-space indent and [ ]")
+}
+
+func TestTaskActive(t *testing.T) {
+	result := ui.StripColors(ui.TaskActive("TASK2", "step 5/10: Code review"))
+	assert.Equal(t, "  [~] TASK2 (step 5/10: Code review)\n", result)
+	assert.True(t, strings.HasPrefix(result, "  [~]"), "TaskActive should start with 2-space indent and [~]")
+}
+
+func TestTaskActive_EmptySuffix(t *testing.T) {
+	result := ui.StripColors(ui.TaskActive("TASK2", ""))
+	assert.Equal(t, "  [~] TASK2\n", result)
+	assert.NotContains(t, result, "(", "Empty suffix should not include parentheses")
+}
