@@ -15,6 +15,7 @@ import (
 
 	"github.com/yarlson/snap/internal/input"
 	"github.com/yarlson/snap/internal/pathutil"
+	"github.com/yarlson/snap/internal/postrun"
 	"github.com/yarlson/snap/internal/provider"
 	"github.com/yarlson/snap/internal/session"
 	"github.com/yarlson/snap/internal/state"
@@ -66,6 +67,18 @@ func run(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Pre-flight: detect git remote and validate gh CLI if GitHub.
+	remoteURL, err := postrun.DetectRemote()
+	if err != nil {
+		return fmt.Errorf("failed to detect git remote: %w", err)
+	}
+	isGitHub := postrun.IsGitHubRemote(remoteURL)
+	if isGitHub {
+		if err := provider.ValidateGH(); err != nil {
+			return err
+		}
+	}
+
 	// Resolve session or legacy layout.
 	rc, err := resolveRunConfig(sessionName, tasksDir, prdPath)
 	if err != nil {
@@ -101,6 +114,8 @@ func run(_ *cobra.Command, args []string) error {
 		ProviderName: providerName,
 		IsTTY:        isTTY,
 		DisplayName:  rc.displayName,
+		RemoteURL:    remoteURL,
+		IsGitHub:     isGitHub,
 	}
 
 	// When running in a TTY, create a SwitchWriter for modal input support.

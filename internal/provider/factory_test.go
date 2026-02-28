@@ -123,6 +123,31 @@ func TestValidateCLI_ErrorFormat(t *testing.T) {
 	assert.Contains(t, msg, "Or use a different provider:")
 }
 
+func TestValidateGH_Missing(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	err := ValidateGH()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gh")
+	assert.Contains(t, err.Error(), "not found in PATH")
+	assert.Contains(t, err.Error(), "https://cli.github.com/")
+}
+
+func TestValidateGH_Exists(t *testing.T) {
+	dir := t.TempDir()
+	binaryName := "gh"
+	if runtime.GOOS == "windows" {
+		binaryName = "gh.exe"
+	}
+	mockBin := filepath.Join(dir, binaryName)
+	require.NoError(t, os.WriteFile(mockBin, []byte("#!/bin/sh\n"), 0o755)) //nolint:gosec // G306: executable permission required for LookPath
+
+	t.Setenv("PATH", dir)
+
+	err := ValidateGH()
+	assert.NoError(t, err)
+}
+
 func TestProviderMapMatchesExecutorFactory(t *testing.T) {
 	// Guard against drift: every provider in the ValidateCLI map must also
 	// be supported by NewExecutorFromEnv. If this test fails, a provider was added

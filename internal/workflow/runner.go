@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/yarlson/snap/internal/model"
+	"github.com/yarlson/snap/internal/postrun"
 	"github.com/yarlson/snap/internal/queue"
 	"github.com/yarlson/snap/internal/snapshot"
 	"github.com/yarlson/snap/internal/state"
@@ -36,6 +37,8 @@ type Config struct {
 	ProviderName string // Provider display name (e.g. "claude", "codex")
 	IsTTY        bool   // Whether stdout is a terminal
 	DisplayName  string // For startup summary (session name or tasks dir path); falls back to TasksDir if empty
+	RemoteURL    string // Pre-detected git remote URL (empty = no remote)
+	IsGitHub     bool   // Whether the remote is a GitHub remote
 }
 
 // StateManager defines the interface for state management, used in tests for dependency injection.
@@ -189,7 +192,7 @@ func (r *Runner) Run(ctx context.Context) error {
 			fmt.Fprint(r.output, ui.Interrupted(fmt.Sprintf("Last error: %s", workflowState.LastError)))
 		}
 	case actionSelect:
-		done, err := r.selectIdleTask(workflowState)
+		done, err := r.selectIdleTask(ctx, workflowState)
 		if err != nil {
 			return err
 		}
@@ -253,7 +256,7 @@ func (r *Runner) Run(ctx context.Context) error {
 			if iterationComplete {
 				// Select next task for the next iteration.
 				// selectIdleTask handles the "all complete" case.
-				done, err := r.selectIdleTask(workflowState)
+				done, err := r.selectIdleTask(ctx, workflowState)
 				if err != nil {
 					return err
 				}
@@ -268,7 +271,7 @@ func (r *Runner) Run(ctx context.Context) error {
 // selectIdleTask scans for TASK<n>.md files and selects the next incomplete task.
 // It updates the state with the selected task and saves it. Returns (true, nil) when
 // all tasks are complete (caller should exit cleanly).
-func (r *Runner) selectIdleTask(workflowState *state.State) (bool, error) {
+func (r *Runner) selectIdleTask(ctx context.Context, workflowState *state.State) (bool, error) {
 	tasks, err := ScanTasks(r.config.TasksDir)
 	if err != nil {
 		return false, fmt.Errorf("failed to scan tasks: %w", err)
@@ -282,6 +285,18 @@ func (r *Runner) selectIdleTask(workflowState *state.State) (bool, error) {
 	if next == nil {
 		// All discovered tasks are completed.
 		fmt.Fprint(r.output, ui.Complete("All tasks implemented!"))
+
+		// Run post-completion step (push, PR, CI).
+		if err := postrun.Run(ctx, postrun.Config{
+			Output:    r.output,
+			RemoteURL: r.config.RemoteURL,
+			IsGitHub:  r.config.IsGitHub,
+			PRDPath:   r.config.PRDPath,
+			TasksDir:  r.config.TasksDir,
+		}); err != nil {
+			return false, err
+		}
+
 		if err := r.stateManager.Reset(); err != nil {
 			fmt.Fprint(r.output, ui.Interrupted(fmt.Sprintf("Warning: failed to clean up state: %v", err)))
 		}

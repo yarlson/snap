@@ -37,6 +37,7 @@ That's it. `snap plan` walks you through requirements and generates task files. 
 - Go 1.25.6+
 - [Claude CLI](https://docs.anthropic.com/en/docs/claude-cli) in your PATH (default provider)
 - Or: [Codex CLI](https://openai.com/index/introducing-codex/) with `SNAP_PROVIDER=codex`
+- For GitHub remotes: [gh CLI](https://cli.github.com/) (optional, only needed if pushing to GitHub)
 
 ## Planning
 
@@ -86,6 +87,16 @@ TASK2.md ──┘                      ▼ next task
 Steps 1, 2, and 4 use a thinking model (Opus) for deep analysis. The rest use a fast model (Haiku) for speed. Context carries across steps within a task.
 
 After each task, snap updates `docs/context/` — a project knowledge base it maintains itself. Architecture decisions, conventions, terminology, and domain knowledge accumulate as tasks complete. Task 10 understands the codebase as well as task 1 built it.
+
+## Auto-push to git
+
+When all tasks are complete, snap automatically pushes commits to your configured git remote (`origin`):
+
+- **No remote configured**: Pushes are skipped, workflow completes cleanly
+- **Non-GitHub remote**: Commits are pushed; PR and CI features are skipped
+- **GitHub remote**: Commits are pushed (requires `gh` CLI in PATH for pre-flight validation)
+
+If push fails (e.g., rejected by remote), the error is displayed and the workflow stops.
 
 ## Steering while it runs
 

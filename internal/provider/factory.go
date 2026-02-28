@@ -69,6 +69,16 @@ func ValidateCLI(providerName string) error {
 	return nil
 }
 
+// ValidateGH checks that the gh CLI binary exists in PATH.
+func ValidateGH() error {
+	if _, err := exec.LookPath("gh"); err != nil {
+		return fmt.Errorf( //nolint:staticcheck // ST1005: capitalized for user-facing DESIGN.md error format
+			"Error: gh not found in PATH\n\nGitHub features require the gh CLI. Install it:\n  https://cli.github.com/\n\nOr use a non-GitHub remote to skip GitHub features",
+		)
+	}
+	return nil
+}
+
 // ResolveProviderName returns the normalized provider name from SNAP_PROVIDER.
 func ResolveProviderName() string {
 	return normalize(os.Getenv(envVar))
