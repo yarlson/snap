@@ -54,9 +54,9 @@
 
 **Planning Artifacts** — Generated planning documents stored in a session's tasks directory: TASK*.md (task files), PRD.md (product requirements), TECHNOLOGY.md (technology decisions), DESIGN.md (design specifications). Detected by `HasArtifacts()` function to prevent accidental overwriting.
 
-**Artifact Conflict** — Occurs when `snap plan` is run on a session that already contains planning artifacts. Prevents accidental overwriting of existing planning documents. In TTY mode, prompts user to confirm cleanup and re-planning. In non-TTY mode, returns error with cleanup instructions.
+**Artifact Conflict** — Occurs when `snap plan` is run on a session that already contains planning artifacts. Prevents accidental overwriting of existing planning documents. In TTY mode, prompts user to choose between [1] clean up and re-plan the session, or [2] create a new session. In non-TTY mode, returns error with cleanup instructions.
 
-**Conflict Guard** — Safety mechanism in `snap plan` that detects existing planning artifacts before starting or resuming planning. Implemented via `checkPlanConflict()` function. Handles TTY vs. non-TTY scenarios differently to prevent automated environments from silently overwriting artifacts.
+**Conflict Guard** — Safety mechanism in `snap plan` that detects existing planning artifacts before starting or resuming planning. Implemented via `checkPlanConflict()` function. Handles TTY vs. non-TTY scenarios differently to prevent automated environments from silently overwriting artifacts. In TTY mode, presents two options to user: clean up existing artifacts or create a new session.
 
 **Raw mode** — Terminal mode where input is not line-buffered; each keystroke is immediately available to the application. Implemented via `termios` on Unix. Allows interactive features like single-key response to Ctrl+C and immediate escape sequence handling.
 

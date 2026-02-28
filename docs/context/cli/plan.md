@@ -34,12 +34,20 @@ After session resolution, `snap plan` checks for existing planning artifacts (TA
   Session '<name>' already has planning artifacts.
 
     [1] Clean up and re-plan this session
+    [2] Create a new session
 
-  Choice (1):
+  Choice (1/2):
   ```
-- User presses `1` to clean all artifacts and proceed with re-planning
-- Session directory and structure remain intact; only task files and state are removed
-- User can press Ctrl+C to abort
+- User options:
+  - Press `1` to clean all artifacts and proceed with re-planning the current session (session directory and structure remain intact; only task files and state are removed)
+  - Press `2` to create a new session with a different name (prompts for "Session name:", validates input, checks for existing sessions, creates new session on valid input)
+- Session creation flow (choice 2):
+  - Prompts user with "Session name:" prompt
+  - Validates name using `session.ValidateName()` (name format rules)
+  - Checks that session doesn't already exist
+  - If invalid or exists: displays error and re-prompts
+  - If valid and new: creates session via `session.Create()` and proceeds with planning in new session
+- User can press Ctrl+C to abort at any point
 
 **Non-TTY (Piped/Redirected Input)**:
 - Returns error with instructions:
@@ -249,7 +257,8 @@ Located in `cmd/plan.go`:
 - `planCmd` — Cobra command definition
 - `planRun()` — Entry point orchestrating full pipeline
 - `resolvePlanSession()` — Session name resolution logic
-- `checkPlanConflict()` — Conflict guard: detects existing artifacts and handles TTY/non-TTY cases
+- `checkPlanConflict()` — Conflict guard: detects existing artifacts and handles TTY/non-TTY cases; dispatches to choice 1 (clean session) or choice 2 (create new session)
+- `promptNewSession()` — Creates new session with user-provided name; prompts for name, validates, checks existence, creates session, returns new session name; supports both TTY raw-mode and piped input
 - `formatMultiplePlanSessionsError()` — Error message formatting
 - `printFileListing(w io.Writer, tasksDir string)` — Directory listing after completion with formatted output via io.Writer
 - Signal handler setup in `planRun()`
