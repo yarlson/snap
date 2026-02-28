@@ -80,4 +80,4 @@ Workflow Runner (orchestrates 10-step iteration workflow)
 - **Markdown rendering**: charmbracelet/glamour
 - **Styling**: charmbracelet/lipgloss (ANSI colors/styles)
 - **Terminal I/O**: golang.org/x/term
-- **Interactive text input**: github.com/yarlson/tap (TAP Text component)
+- **Interactive terminal components**: github.com/yarlson/tap (Text input with validation, Select prompts with arrow-key navigation)

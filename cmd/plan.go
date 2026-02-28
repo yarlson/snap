@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/yarlson/tap"
 
 	"github.com/yarlson/snap/internal/input"
 	"github.com/yarlson/snap/internal/plan"
@@ -42,9 +43,20 @@ func planRun(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Set up signal handling early so ctx is available for tap components.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+
 	// Conflict guard: check for existing planning artifacts.
 	isTTY := input.IsTerminal(os.Stdin)
-	sessionName, err = checkPlanConflict(sessionName, isTTY, os.Stdin, os.Stdout)
+	sessionName, err = checkPlanConflict(ctx, sessionName, isTTY)
 	if err != nil {
 		return err
 	}
@@ -89,17 +101,6 @@ func planRun(_ *cobra.Command, args []string) error {
 	)
 
 	planner := plan.NewPlanner(executor, sessionName, td, opts...)
-
-	// Set up signal handling.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		cancel()
-	}()
 
 	if err := planner.Run(ctx); err != nil {
 		if ctx.Err() != nil {
@@ -161,7 +162,7 @@ func formatMultiplePlanSessionsError(sessions []session.Info) error {
 // checkPlanConflict detects existing planning artifacts and either prompts
 // the user (TTY) or returns an error (non-TTY). Returns the session name to
 // proceed with, or an error to abort.
-func checkPlanConflict(sessionName string, isTTY bool, stdin io.Reader, stdout io.Writer) (string, error) {
+func checkPlanConflict(ctx context.Context, sessionName string, isTTY bool) (string, error) {
 	if !session.HasArtifacts(".", sessionName) {
 		return sessionName, nil
 	}
@@ -176,100 +177,61 @@ func checkPlanConflict(sessionName string, isTTY bool, stdin io.Reader, stdout i
 			sessionName, sessionName, sessionName)
 	}
 
-	// TTY: display prompt and read single-character choice.
-	prompt := fmt.Sprintf("Session %q already has planning artifacts.\n\n"+
-		"  [1] Clean up and re-plan this session\n"+
-		"  [2] Create a new session\n\n",
-		sessionName)
-	fmt.Fprint(stdout, prompt)
+	choice := tap.Select(ctx, tap.SelectOptions[string]{
+		Message: fmt.Sprintf("Session %q already has planning artifacts.", sessionName),
+		Options: []tap.SelectOption[string]{
+			{Value: "replan", Label: "Clean up and re-plan this session"},
+			{Value: "new", Label: "Create a new session"},
+		},
+	})
 
-	label := ui.ResolveStyle(ui.WeightBold) +
-		ui.ResolveColor(ui.ColorSecondary) +
-		"Choice (1/2): " +
-		ui.ResolveStyle(ui.WeightNormal)
-	fmt.Fprint(stdout, label)
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	if choice == "" {
+		return "", context.Canceled
+	}
 
-	buf := make([]byte, 1)
-	for {
-		n, err := stdin.Read(buf)
-		if err != nil {
-			return "", fmt.Errorf("read input: %w", err)
+	switch choice {
+	case "replan":
+		if err := session.CleanSession(".", sessionName); err != nil {
+			return "", fmt.Errorf("clean session: %w", err)
 		}
-		if n == 0 {
-			continue
-		}
-
-		switch buf[0] {
-		case '1':
-			fmt.Fprint(stdout, "1\r\n")
-			if err := session.CleanSession(".", sessionName); err != nil {
-				return "", fmt.Errorf("clean session: %w", err)
-			}
-			return sessionName, nil
-		case '2':
-			fmt.Fprint(stdout, "2\r\n")
-			// Drain the trailing newline left by cooked-mode line buffering
-			// when the user presses Enter after '2'. Only drain on real terminals (with Fd).
-			type fder interface{ Fd() uintptr }
-			if _, ok := stdin.(fder); ok {
-				drain := make([]byte, 1)
-				stdin.Read(drain) //nolint:errcheck // consume stale newline from cooked-mode input
-			}
-			return promptNewSession(stdin, stdout)
-		case 3: // Ctrl+C
-			fmt.Fprint(stdout, "\r\n")
-			return "", input.ErrInterrupt
-		}
-		// All other bytes: ignore.
+		return sessionName, nil
+	case "new":
+		return promptNewSession(ctx)
+	default:
+		return "", context.Canceled
 	}
 }
 
-// promptNewSession displays a "Session name:" prompt, validates the input,
-// creates the session, and returns the new session name. Invalid names and
-// existing session names trigger a re-prompt.
-func promptNewSession(stdin io.Reader, stdout io.Writer) (string, error) {
-	nameLoop := func() (string, error) {
-		for {
-			name, err := input.ReadLine(stdin, stdout, "Session name: ")
-			if err != nil {
-				return "", err
+// promptNewSession displays a "Session name:" prompt with validation,
+// creates the session, and returns the new session name.
+func promptNewSession(ctx context.Context) (string, error) {
+	name := tap.Text(ctx, tap.TextOptions{
+		Message:     "Session name",
+		Placeholder: "Enter a name for the new session",
+		Validate: func(s string) error {
+			s = strings.TrimSpace(s)
+			if err := session.ValidateName(s); err != nil {
+				return err
 			}
-			name = strings.TrimSpace(name)
+			if session.Exists(".", s) {
+				return fmt.Errorf("session %q already exists", s)
+			}
+			return nil
+		},
+	})
 
-			if err := session.ValidateName(name); err != nil {
-				msg := err.Error()
-				if msg != "" {
-					msg = strings.ToUpper(msg[:1]) + msg[1:]
-				}
-				fmt.Fprintf(stdout, "%s\r\n", msg)
-				continue
-			}
-
-			if session.Exists(".", name) {
-				fmt.Fprintf(stdout, "Session %q already exists\r\n", name)
-				continue
-			}
-
-			if err := session.Create(".", name); err != nil {
-				return "", err
-			}
-			return name, nil
-		}
+	if name == "" {
+		return "", context.Canceled
 	}
 
-	// Enter raw mode if stdin supports it (real terminal).
-	// In tests, stdin is a bytes.Reader and raw mode is not needed.
-	type fder interface{ Fd() uintptr }
-	if f, ok := stdin.(fder); ok {
-		var result string
-		err := input.WithRawMode(int(f.Fd()), func() error {
-			var innerErr error
-			result, innerErr = nameLoop()
-			return innerErr
-		})
-		return result, err
+	name = strings.TrimSpace(name)
+	if err := session.Create(".", name); err != nil {
+		return "", err
 	}
-	return nameLoop()
+	return name, nil
 }
 
 // printFileListing prints all files found in the tasks directory.

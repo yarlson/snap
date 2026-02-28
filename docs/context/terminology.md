@@ -52,17 +52,21 @@
 
 **Plan marker** — Hidden file `.plan-started` created in session directory when plan command starts, used for session status tracking to distinguish planning-in-progress from completed planning.
 
-**Planning Artifacts** — Generated planning documents stored in a session's tasks directory: TASK*.md (task files), PRD.md (product requirements), TECHNOLOGY.md (technology decisions), DESIGN.md (design specifications). Detected by `HasArtifacts()` function to prevent accidental overwriting.
+**Planning Artifacts** — Generated planning documents stored in a session's tasks directory: TASK\*.md (task files), PRD.md (product requirements), TECHNOLOGY.md (technology decisions), DESIGN.md (design specifications). Detected by `HasArtifacts()` function to prevent accidental overwriting.
 
-**Artifact Conflict** — Occurs when `snap plan` is run on a session that already contains planning artifacts. Prevents accidental overwriting of existing planning documents. In TTY mode, prompts user to choose between [1] clean up and re-plan the session, or [2] create a new session. In non-TTY mode, returns error with cleanup instructions.
+**Artifact Conflict** — Occurs when `snap plan` is run on a session that already contains planning artifacts. Prevents accidental overwriting of existing planning documents. In TTY mode, uses `tap.Select` to let user choose between cleaning up and re-planning, or creating a new session. In non-TTY mode, returns error with cleanup instructions.
 
-**Conflict Guard** — Safety mechanism in `snap plan` that detects existing planning artifacts before starting or resuming planning. Implemented via `checkPlanConflict()` function. Handles TTY vs. non-TTY scenarios differently to prevent automated environments from silently overwriting artifacts. In TTY mode, presents two options to user: clean up existing artifacts or create a new session.
+**Conflict Guard** — Safety mechanism in `snap plan` that detects existing planning artifacts before starting or resuming planning. Implemented via `checkPlanConflict()` function. Handles TTY vs. non-TTY scenarios differently to prevent automated environments from silently overwriting artifacts. In TTY mode, uses `tap.Select` to present two options (clean up and re-plan, or create a new session); on "new session" choice, uses `tap.Text` for name entry with inline validation.
 
-**Raw mode** — Terminal mode where input is not line-buffered; each keystroke is immediately available to the application. Implemented via `termios` on Unix. Allows interactive features like single-key response to Ctrl+C and immediate escape sequence handling.
+**Raw mode** — Terminal mode where input is not line-buffered; each keystroke is immediately available to the application. Implemented via `termios` on Unix. Used by the run command's input reader for interactive step control.
 
-**Interactive input** — User input from a TTY terminal via `tap.Text` component. Provides styled text input with placeholder text, supports Ctrl+C and Escape (abort), validation callbacks, and context cancellation. Used in Phase 1 of plan command for requirements gathering.
+**Interactive input** — User input from a TTY terminal via tap components (`tap.Text`, `tap.Select`). Provides styled text input with placeholder text, selection prompts with arrow-key navigation, Ctrl+C and Escape (abort), validation callbacks, and context cancellation.
 
-**TAP Text** — Component from `github.com/yarlson/tap` library providing styled interactive text input with validation. Supports Ctrl+C (cancel), Escape (cancel), validation callbacks, and context cancellation. Used in Phase 1 of plan command for interactive requirements gathering.
+**TAP Text** — Component from `github.com/yarlson/tap` library providing styled interactive text input with validation. Supports Ctrl+C (cancel), Escape (cancel), validation callbacks, and context cancellation. Used in Phase 1 of plan command for interactive requirements gathering and in conflict guard for session name entry.
+
+**TAP Select** — Component from `github.com/yarlson/tap` library providing styled selection prompt with arrow-key navigation. First option is pre-selected; user navigates with up/down arrows, confirms with Enter, cancels with Ctrl+C or Escape (returns zero value). Used in plan command conflict guard for replan/new-session choice.
+
+**TAP Mock Pattern** — Testing strategy for tap components using `tap.NewMockReadable()`, `tap.NewMockWritable()`, and `tap.SetTermIO(in, out)`. Tests run the component in a goroutine and emit keypresses asynchronously with `time.Sleep` for synchronization. Tests using `SetTermIO` must NOT run in parallel (global state). After validation error, tap keeps field content — tests must emit backspace characters to clear before typing corrected input.
 
 **Brief** — Extracted requirements from Phase 1 conversation or provided via `--from` file, used as input to Phase 2 document generation prompts.
 
