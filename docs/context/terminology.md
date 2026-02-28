@@ -48,7 +48,7 @@
 
 **Phase 1 (Requirements gathering)** — Interactive phase of planning where user chats with Claude. User types messages to provide context and answer clarifying questions, then types `/done` to complete Phase 1 and advance to Phase 2. Skipped if `--from` flag provides input file.
 
-**Phase 2 (Document generation)** — Autonomous phase of planning where Claude generates four structured documents: PRD.md (requirements), TECHNOLOGY.md (architecture), DESIGN.md (specifications), and TASK\*.md (individual tasks). Documents are generated sequentially and written to `.snap/sessions/<name>/tasks/`. All Phase 2 prompts are prepended with shared engineering principles to guide consistent decision-making across all generated documents.
+**Phase 2 (Document generation)** — Autonomous phase of planning where Claude generates four structured documents: PRD.md (requirements), TECHNOLOGY.md (architecture), DESIGN.md (specifications), and TASK\*.md (individual tasks). Document generation uses a 3-step pipeline: PRD generated sequentially, TECHNOLOGY and DESIGN generated concurrently via errgroup, task splitting generated sequentially. All Phase 2 prompts are prepended with shared engineering principles to guide consistent decision-making across all generated documents.
 
 **Engineering Principles** — Shared decision-making guidelines (KISS, DRY, SOLID, YAGNI) that steer all Phase 2 planning document generation. Principles resolve conflicts by favoring simplicity: straightforward solutions that work today are better than elegant abstractions that anticipate tomorrow.
 
