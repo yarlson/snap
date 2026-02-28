@@ -70,6 +70,13 @@ var newCmd = &cobra.Command{
 - Creates `.snap/sessions/<name>/tasks/` directory structure
 - Initializes with template PRD.md and TASK1.md files
 
+**EnsureDefault() function** (`internal/session/session.go`):
+
+- Idempotent function that creates "default" session if it doesn't exist
+- Returns immediately if "default" already exists (no error, no re-creation)
+- Creates directory structure and initializes files same as `Create()`
+- Used by plan command to auto-create "default" session on fresh projects
+
 ### Delete Session Command
 
 Cobra command definition:
@@ -192,15 +199,15 @@ var planCmd = &cobra.Command{
 **planRun function** (`cmd/plan.go`):
 
 1. Resolves session name (explicit arg or auto-detect)
-2. Validates session exists
-3. Detects if prior planning session exists via `session.HasPlanHistory()`
-4. Creates planner with resumption support if applicable
-5. Executes two-phase planning pipeline:
+   - If no sessions exist, auto-creates "default" session via `session.EnsureDefault()`
+2. Detects if prior planning session exists via `session.HasPlanHistory()`
+3. Creates planner with resumption support if applicable
+4. Executes two-phase planning pipeline:
    - Phase 1: Interactive requirements gathering (or resume prior conversation)
    - Phase 2: Autonomous document generation (PRD, TECHNOLOGY, DESIGN, TASK files)
-6. Writes `.plan-started` marker after first successful message via callback
+5. Writes `.plan-started` marker after first successful message via callback
 
-**Session resolution**: Same logic as list/delete/status commands
+**Session resolution**: Same logic as list/delete/status commands, with auto-creation of "default" when zero sessions exist
 
 ### Status Session Command
 

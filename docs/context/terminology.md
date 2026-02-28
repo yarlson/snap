@@ -20,6 +20,8 @@
 
 **Named Session** — Session created via `snap new <name>` command, allowing multiple independent projects or features to be managed within a single repository.
 
+**Default Session** — Special session named "default" automatically created by `snap plan` when no sessions exist on a fresh project. Enables planning workflow without requiring explicit `snap new <name>` first. Created via `session.EnsureDefault()` which is idempotent.
+
 **Auto-detection** — Feature of `snap run` (without session name) that automatically selects the workflow session when exactly one session exists. If zero sessions exist, falls back to legacy layout. If multiple sessions exist, returns error with list.
 
 **Legacy fallback** — Workflow mode used when no named sessions exist, falling back to task files in `docs/tasks/` directory or `--tasks-dir` flag. Uses global `.snap/state.json` for state tracking, not session-scoped state.

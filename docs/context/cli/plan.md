@@ -12,16 +12,15 @@ snap plan [session] --from <file>
 ## Session Resolution
 
 - **Explicit session**: `snap plan auth-system` — uses specified session (must exist; error if not found)
-- **Auto-detect**: `snap plan` — uses single existing session if exactly one exists; error with session list if multiple or none exist
+- **Auto-detect**: `snap plan` — uses single existing session if exactly one exists; or auto-creates "default" session if none exist
 - **Error cases**:
-  - No sessions: "no sessions found\n\nTo create a session:\n snap new <name>"
   - Multiple sessions: Lists available sessions with task counts, prompts user to specify one
 
 Session resolution logic:
 
 1. If session name provided as arg → validate and use
 2. If no args → list all sessions
-   - 0 sessions: error
+   - 0 sessions: auto-create "default" session via `session.EnsureDefault()`
    - 1 session: auto-use it
    - 2+ sessions: error with list and prompt
 
@@ -178,7 +177,7 @@ After successful completion:
 
 ## Integration Points
 
-- **session package**: `Resolve()`, `List()`, `Dir()`, `TasksDir()`, `HasPlanHistory()`, `MarkPlanStarted()`
+- **session package**: `Resolve()`, `List()`, `Dir()`, `TasksDir()`, `EnsureDefault()`, `HasPlanHistory()`, `MarkPlanStarted()`
 - **provider package**: `ResolveProviderName()`, `ValidateCLI()`, `NewExecutorFromEnv()`
 - **workflow package**: `Executor` interface (LLM calls)
 - **ui package**: `Interrupted()` formatting function
