@@ -78,19 +78,20 @@ The conflict guard ensures users don't accidentally overwrite planning artifacts
 
 Planner supports two input modes:
 
-**Raw-mode input (TTY)**: When a terminal is available (stdin is a TTY), Phase 1 uses interactive raw-mode input via `input.ReadLine()`:
+**Interactive input (TTY)**: When a terminal is available (stdin is a TTY), Phase 1 uses `tap.Text` from the `github.com/yarlson/tap` library:
 
-- Terminal runs in raw mode (no canonical line buffering)
-- Provides single-key response to Ctrl+C (returns `input.ErrInterrupt`, aborts planning with context.Canceled)
-- Handles escape sequences properly (arrow keys, Home, End consumed without character pollution)
-- Backspace/Ctrl+U/Ctrl+W for line editing
+- Styled text input component with prompt and placeholder text
+- Placeholder: "Describe your requirements, or /done to finish"
+- Single-key response to Ctrl+C or Escape (returns empty string, aborts planning with context.Canceled)
+- Full line editing support
+- Validation: rejects empty input with error message "enter a message, or /done to finish"
 - Prompt: "snap plan> "
 
 **Scanner input (piped/redirected)**: When stdin is not a TTY, Phase 1 uses buffered input via `bufio.Scanner`:
 
 - Reads complete lines from pipe/redirect
 - Standard EOF handling
-- No raw mode terminal manipulation
+- No terminal manipulation
 
 #### Phase 1 Flow
 
@@ -102,7 +103,7 @@ Planner supports two input modes:
 3. If fresh start: Initialize chat with prompt template
 4. If resuming: Executor call with `-c` flag continues prior conversation
 5. Read/write interactively until user types `/done`:
-   - If TTY: Use raw-mode ReadLine (Ctrl+C → context.Canceled)
+   - If TTY: Use tap.Text with validation and placeholder (Ctrl+C or Escape → context.Canceled)
    - If piped: Use buffered Scanner (EOF → transition to Phase 2)
 6. Extract brief from conversation history
 7. Transition to Phase 2
@@ -222,15 +223,16 @@ After successful completion:
 - **workflow package**: `Executor` interface (LLM calls)
 - **ui package**: `Interrupted()` formatting function
 - **model package**: Task and document models
-- **internal/input package** (raw-mode input):
+- **tap package** (`github.com/yarlson/tap`):
+  - `Text(ctx, TextOptions)` — interactive text input with validation, placeholder, and abort support (Ctrl+C, Escape)
+  - `TextOptions` — configuration with Message, Placeholder, and Validate callback
+- **internal/input package**:
   - `IsTerminal(*os.File)` — checks if file descriptor is a TTY
-  - `WithRawMode(fd, fn)` — enters raw terminal mode, executes fn, guarantees restoration on return
-  - `ReadLine(r, w, prompt)` — interactive line input with styled prompt, full cursor movement (arrow left/right), mid-line insertion/deletion, Ctrl+U (clear), Ctrl+W (delete word), Ctrl+C, and escape sequence handling
-  - `ErrInterrupt` — error returned by ReadLine when user presses Ctrl+C
+  - Still used by `cmd/run.go` for reader configuration (separate from plan interactive input)
 - **internal/plan package**:
   - Planner implementation, prompt rendering, Phase 1/2 logic
-  - Options: `WithResume()`, `WithAfterFirstMessage()`, `WithBrief()`, `WithInput()`, `WithOutput()`, `WithTerminal()`
-  - Phase 1 methods: `gatherRequirements()` (dispatches to raw-mode or scanner), `gatherRequirementsRaw()`, `gatherRequirementsScanner()`
+  - Options: `WithResume()`, `WithAfterFirstMessage()`, `WithBrief()`, `WithInput()`, `WithOutput()`, `WithInteractive()`
+  - Phase 1 methods: `gatherRequirements()` (dispatches to interactive or scanner), `gatherRequirementsInteractive()`, `gatherRequirementsScanner()`
   - Callback: `onFirstMessage()` fires after first successful executor call
 
 ## Testing
@@ -240,19 +242,24 @@ After successful completion:
   - File generation and placement
   - Signal interruption behavior
 - Unit tests: `internal/plan/planner_test.go`, `internal/plan/prompt_test.go`
-  - Phase 1 interactive chat flow (raw-mode and scanner modes)
+  - Phase 1 interactive chat flow via tap.Text (TTY mode) and scanner (piped mode)
   - Phase 2 document generation
   - Prompt rendering with template variables
-  - Option application (WithBrief, WithOutput, WithInput, WithTerminal)
-- Raw-mode input tests: `internal/input/rawmode_test.go`, `internal/input/readline_test.go`
-  - Raw terminal mode enter/exit and restoration
-  - Line reading with Ctrl+C handling
-  - Backspace and line editing
-  - Escape sequence consumption
+  - Option application (WithBrief, WithOutput, WithInput, WithInteractive)
+  - Resume mode with interactive input
+  - Interactive abort paths: Ctrl+C, Escape, context cancellation
+  - Multiple message exchanges in interactive mode
+- Interactive input tests (tap.Text): `internal/plan/planner_test.go`
+  - User message submission with /done command
+  - Case-insensitive /done handling
+  - Empty input validation (rejected by Validate func)
+  - Ctrl+C and Escape abort support
+  - Context cancellation
+  - Multiple message exchanges
+  - Resume mode behavior
 - TAP Text integration tests: `internal/plan/tap_integration_test.go`
-  - Validates tap.Text input component from `github.com/yarlson/tap` library as alternative input mechanism
+  - Validates tap.Text input component from `github.com/yarlson/tap` library
   - Tests via mock I/O: submit with content, validation rejection (empty input), Ctrl+C abort, Escape abort, context cancellation
-  - Proves TAP Text integration strategy for future Phase 1 input refactoring
 
 ## Command Implementation
 

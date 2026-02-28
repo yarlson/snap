@@ -92,9 +92,17 @@
 
 ## Terminal Input Handling
 
-**Raw-mode input for interactive TTY**:
+**Interactive TTY input for plan command (Phase 1)**:
 
-- Use `input.WithRawMode(fd, fn)` to enter/exit raw terminal mode safely
+- Use `tap.Text(ctx, TextOptions)` from `github.com/yarlson/tap` library for styled interactive text input
+- Provides placeholder text, validation callbacks, and abort support (Ctrl+C, Escape)
+- Dispatch based on TTY detection: use tap.Text for TTY, bufio.Scanner for piped input
+- Validation callback returns error for empty input: "enter a message, or /done to finish"
+- Returns empty string on user abort (Ctrl+C or Escape) — convert to `context.Canceled` for graceful shutdown
+
+**Raw-mode input for run command reader**:
+
+- Use `input.WithRawMode(fd, fn)` to enter/exit raw terminal mode safely (used by `cmd/run.go`)
 - Raw mode ensures terminal restoration on function return, panic, or signal
 - Implements signal handlers for SIGINT/SIGTERM to restore terminal before process exit
 - Use within WithRawMode: `input.ReadLine(r, w, prompt)` for interactive line input
@@ -111,13 +119,14 @@
 **Input mode selection**:
 
 - Detect TTY: `input.IsTerminal(file)` checks if file is connected to terminal
-- Use raw-mode input when TTY detected (interactive TTY input)
+- For plan Phase 1: dispatch to tap.Text (TTY) or bufio.Scanner (piped)
+- For run command reader: use raw-mode input when TTY detected
 - Use buffered input (bufio.Scanner) when not TTY (piped/redirected input)
-- Apply in Phase 1 of plan command: dispatch to `gatherRequirementsRaw()` or `gatherRequirementsScanner()` based on TTY
 
 **Error handling in interactive input**:
 
-- `input.ErrInterrupt` signals user abort (Ctrl+C) — convert to `context.Canceled` for graceful shutdown
+- For tap.Text: empty string result with no context error signals user abort — convert to `context.Canceled`
+- For raw-mode ReadLine: `input.ErrInterrupt` signals user abort (Ctrl+C) — convert to `context.Canceled`
 - EOF from ReadLine or Scanner — transition to next phase or exit with graceful completion
 - All other errors — propagate with context
 

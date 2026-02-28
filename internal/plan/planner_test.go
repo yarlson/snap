@@ -8,9 +8,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yarlson/tap"
 
 	"github.com/yarlson/snap/internal/model"
 )
@@ -490,4 +492,260 @@ func TestPlanner_AfterFirstMessage_WithBrief(t *testing.T) {
 	err := p.Run(context.Background())
 	require.NoError(t, err)
 	assert.True(t, callbackCalled, "afterFirstMessage should be called in --from mode too")
+}
+
+// --- Interactive (tap) path tests ---
+//
+// These tests use tap.SetTermIO (global state) so they must NOT use t.Parallel().
+
+// emitString types each rune as a keypress via the mock readable.
+func emitString(in *tap.MockReadable, s string) {
+	for _, ch := range s {
+		str := string(ch)
+		in.EmitKeypress(str, tap.Key{Name: str})
+	}
+}
+
+// emitLine types a string followed by Enter.
+func emitLine(in *tap.MockReadable, s string) {
+	emitString(in, s)
+	in.EmitKeypress("", tap.Key{Name: "return"})
+}
+
+func TestPlanner_Interactive_UserMessageThenDone(t *testing.T) {
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	exec := &mockExecutor{}
+	var buf bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&buf),
+		WithInteractive(true),
+	)
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		emitLine(in, "hello")
+		time.Sleep(200 * time.Millisecond)
+		emitLine(in, "/done")
+	}()
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	calls := exec.getCalls()
+	// 1 (requirements prompt) + 1 (user msg "hello") + 4 (generation) = 6
+	assert.Equal(t, 6, len(calls))
+	// Requirements prompt (no -c)
+	assert.NotContains(t, calls[0].args, "-c")
+	// User message with -c, last arg is "hello"
+	assert.Contains(t, calls[1].args, "-c")
+	assert.Equal(t, "hello", calls[1].args[len(calls[1].args)-1])
+}
+
+func TestPlanner_Interactive_DoneImmediately(t *testing.T) {
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	exec := &mockExecutor{}
+	var buf bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&buf),
+		WithInteractive(true),
+	)
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		emitLine(in, "/done")
+	}()
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	calls := exec.getCalls()
+	// 1 (requirements prompt) + 0 (no user msgs) + 4 (generation) = 5
+	assert.Equal(t, 5, len(calls))
+}
+
+func TestPlanner_Interactive_DoneCaseInsensitive(t *testing.T) {
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	exec := &mockExecutor{}
+	var buf bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&buf),
+		WithInteractive(true),
+	)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		emitLine(in, "/DONE")
+	}()
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	calls := exec.getCalls()
+	// 1 (requirements prompt) + 4 (generation) = 5
+	assert.Equal(t, 5, len(calls))
+}
+
+func TestPlanner_Interactive_CtrlC_Aborts(t *testing.T) {
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	exec := &mockExecutor{}
+	var buf bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&buf),
+		WithInteractive(true),
+	)
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		in.EmitKeypress("\x03", tap.Key{Name: "c", Ctrl: true})
+	}()
+
+	err := p.Run(context.Background())
+	require.ErrorIs(t, err, context.Canceled)
+
+	output := buf.String()
+	assert.Contains(t, output, "Planning aborted")
+}
+
+func TestPlanner_Interactive_Escape_Aborts(t *testing.T) {
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	exec := &mockExecutor{}
+	var buf bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&buf),
+		WithInteractive(true),
+	)
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		in.EmitKeypress("", tap.Key{Name: "escape"})
+	}()
+
+	err := p.Run(context.Background())
+	require.ErrorIs(t, err, context.Canceled)
+
+	output := buf.String()
+	assert.Contains(t, output, "Planning aborted")
+}
+
+func TestPlanner_Interactive_ContextCancel(t *testing.T) {
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	exec := &mockExecutor{}
+	var buf bytes.Buffer
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&buf),
+		WithInteractive(true),
+	)
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		cancel()
+	}()
+
+	err := p.Run(ctx)
+	require.ErrorIs(t, err, context.Canceled)
+
+	output := buf.String()
+	assert.Contains(t, output, "Planning aborted")
+}
+
+func TestPlanner_Interactive_MultipleMessages(t *testing.T) {
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	exec := &mockExecutor{}
+	var buf bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&buf),
+		WithInteractive(true),
+	)
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		emitLine(in, "msg1")
+		time.Sleep(200 * time.Millisecond)
+		emitLine(in, "msg2")
+		time.Sleep(200 * time.Millisecond)
+		emitLine(in, "/done")
+	}()
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	calls := exec.getCalls()
+	// 1 (requirements) + 2 (user msgs) + 4 (generation) = 7
+	assert.Equal(t, 7, len(calls))
+	// User messages have -c
+	assert.Contains(t, calls[1].args, "-c")
+	assert.Equal(t, "msg1", calls[1].args[len(calls[1].args)-1])
+	assert.Contains(t, calls[2].args, "-c")
+	assert.Equal(t, "msg2", calls[2].args[len(calls[2].args)-1])
+}
+
+func TestPlanner_Interactive_WithResume(t *testing.T) {
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	exec := &mockExecutor{}
+	var buf bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&buf),
+		WithInteractive(true),
+		WithResume(true),
+	)
+
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		emitLine(in, "refine")
+		time.Sleep(200 * time.Millisecond)
+		emitLine(in, "/done")
+	}()
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	calls := exec.getCalls()
+	// First executor call (requirements prompt) has -c (resume mode)
+	require.GreaterOrEqual(t, len(calls), 1)
+	assert.Contains(t, calls[0].args, "-c", "resume mode: first call should have -c")
+
+	output := buf.String()
+	assert.Contains(t, output, "Resuming planning")
 }
