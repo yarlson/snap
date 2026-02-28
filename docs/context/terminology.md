@@ -60,9 +60,11 @@
 
 **Raw mode** — Terminal mode where input is not line-buffered; each keystroke is immediately available to the application. Implemented via `termios` on Unix. Used by the run command's input reader for interactive step control.
 
-**Interactive input** — User input from a TTY terminal via tap components (`tap.Text`, `tap.Select`). Provides styled text input with placeholder text, selection prompts with arrow-key navigation, Ctrl+C and Escape (abort), validation callbacks, and context cancellation.
+**Interactive input** — User input from a TTY terminal via tap components (`tap.Text`, `tap.Textarea`, `tap.Select`). Provides styled text input with placeholder text, multiline text input for requirements gathering, selection prompts with arrow-key navigation, Ctrl+C and Escape (abort), validation callbacks, and context cancellation.
 
-**TAP Text** — Component from `github.com/yarlson/tap` library providing styled interactive text input with validation. Supports Ctrl+C (cancel), Escape (cancel), validation callbacks, and context cancellation. Used in Phase 1 of plan command for interactive requirements gathering and in conflict guard for session name entry.
+**TAP Text** — Component from `github.com/yarlson/tap` library providing styled interactive text input with validation. Supports Ctrl+C (cancel), Escape (cancel), validation callbacks, and context cancellation. Used in conflict guard for session name entry.
+
+**TAP Textarea** — Component from `github.com/yarlson/tap` library providing styled multiline text input with validation. Supports line-by-line editing, cursor navigation, Shift+Return for new lines, Ctrl+C (cancel), Escape (cancel), validation callbacks, and context cancellation. Used in Phase 1 of plan command for interactive requirements gathering.
 
 **TAP Select** — Component from `github.com/yarlson/tap` library providing styled selection prompt with arrow-key navigation. First option is pre-selected; user navigates with up/down arrows, confirms with Enter, cancels with Ctrl+C or Escape (returns zero value). Used in plan command conflict guard for replan/new-session choice.
 

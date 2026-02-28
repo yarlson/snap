@@ -95,7 +95,9 @@
 **Interactive TTY input via tap components (`github.com/yarlson/tap`)**:
 
 - `tap.Text(ctx, TextOptions)` — styled text input with validation, placeholder, and abort support (Ctrl+C, Escape)
-  - Used in Phase 1 for requirements gathering and in conflict guard for session name entry
+  - Used in conflict guard for session name entry
+- `tap.Textarea(ctx, TextareaOptions)` — styled multiline text input with validation, placeholder, and abort support (Ctrl+C, Escape)
+  - Used in Phase 1 for requirements gathering
   - Validation callback rejects invalid input; tap displays error inline and keeps user in prompt (field content preserved)
   - Returns empty string on user abort (Ctrl+C or Escape) — convert to `context.Canceled` for graceful shutdown
 - `tap.Select(ctx, SelectOptions[T])` — styled selection prompt with arrow-key navigation
@@ -107,12 +109,12 @@
 
 - Detect TTY: `input.IsTerminal(file)` checks if file is connected to terminal
 - For plan conflict guard: use tap.Select + tap.Text for TTY, return error for non-TTY
-- For plan Phase 1: dispatch to tap.Text (TTY) or bufio.Scanner (piped)
+- For plan Phase 1: dispatch to tap.Textarea (TTY) or bufio.Scanner (piped)
 - For run command reader: use structured input mode when TTY detected, buffered input when piped
 
 **Error handling in interactive input**:
 
-- For tap.Text/tap.Select: empty/zero result with no context error signals user abort — convert to `context.Canceled`
+- For tap.Text/tap.Textarea/tap.Select: empty/zero result with no context error signals user abort — convert to `context.Canceled`
 - EOF from Scanner — transition to next phase or exit with graceful completion
 - All other errors — propagate with context
 

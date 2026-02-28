@@ -79,14 +79,14 @@ The conflict guard ensures users don't accidentally overwrite planning artifacts
 
 Planner supports two input modes:
 
-**Interactive input (TTY)**: When a terminal is available (stdin is a TTY), Phase 1 uses `tap.Text` from the `github.com/yarlson/tap` library:
+**Interactive input (TTY)**: When a terminal is available (stdin is a TTY), Phase 1 uses `tap.Textarea` from the `github.com/yarlson/tap` library:
 
-- Styled text input component with prompt and placeholder text
+- Styled multiline text input component with prompt and placeholder text
+- Message: "Your response"
 - Placeholder: "Describe your requirements, or /done to finish"
 - Single-key response to Ctrl+C or Escape (returns empty string, aborts planning with context.Canceled)
-- Full line editing support
+- Full line editing and multiline support (Shift+Return for new lines)
 - Validation: rejects empty input with error message "enter a message, or /done to finish"
-- Prompt: "snap plan> "
 
 **Scanner input (piped/redirected)**: When stdin is not a TTY, Phase 1 uses buffered input via `bufio.Scanner`:
 
@@ -104,7 +104,7 @@ Planner supports two input modes:
 3. If fresh start: Initialize chat with prompt template
 4. If resuming: Executor call with `-c` flag continues prior conversation
 5. Read/write interactively until user types `/done`:
-   - If TTY: Use tap.Text with validation and placeholder (Ctrl+C or Escape → context.Canceled)
+   - If TTY: Use tap.Textarea with validation and placeholder (Ctrl+C or Escape → context.Canceled)
    - If piped: Use buffered Scanner (EOF → transition to Phase 2)
 6. Extract brief from conversation history
 7. Transition to Phase 2
@@ -226,16 +226,18 @@ After successful completion:
 - **model package**: Task and document models
 - **tap package** (`github.com/yarlson/tap`):
   - `Select(ctx, SelectOptions[T])` — styled selection prompt with arrow-key navigation; used in conflict guard for replan/new-session choice
-  - `Text(ctx, TextOptions)` — interactive text input with validation, placeholder, and abort support (Ctrl+C, Escape); used in conflict guard for new session name entry and Phase 1 requirements gathering
+  - `Text(ctx, TextOptions)` — interactive text input with validation, placeholder, and abort support (Ctrl+C, Escape); used in conflict guard for new session name entry
+  - `Textarea(ctx, TextareaOptions)` — interactive multiline text input with validation, placeholder, and abort support (Ctrl+C, Escape); used in Phase 1 requirements gathering
   - `SelectOptions[T]` — configuration with Message and Options ([]SelectOption[T] with Value and Label)
   - `TextOptions` — configuration with Message, Placeholder, and Validate callback
+  - `TextareaOptions` — configuration with Message, Placeholder, and Validate callback
 - **internal/input package**:
   - `IsTerminal(*os.File)` — checks if file descriptor is a TTY (used by both plan and run for input mode detection)
   - `NewReader()`, `NewMode()` — input handling for run command reader configuration
 - **internal/plan package**:
   - Planner implementation, prompt rendering, Phase 1/2 logic
   - Options: `WithResume()`, `WithAfterFirstMessage()`, `WithBrief()`, `WithInput()`, `WithOutput()`, `WithInteractive()`
-  - Phase 1 methods: `gatherRequirements()` (dispatches to interactive or scanner), `gatherRequirementsInteractive()`, `gatherRequirementsScanner()`
+  - Phase 1 methods: `gatherRequirements()` (dispatches to interactive or scanner), `gatherRequirementsInteractive()` (uses tap.Textarea), `gatherRequirementsScanner()`
   - Callback: `onFirstMessage()` fires after first successful executor call
 
 ## Testing
@@ -250,14 +252,14 @@ After successful completion:
   - Tests: empty session (no prompt), non-TTY error, choice 1 (Enter selects pre-selected replan), Ctrl+C cancellation, choice 2 with valid name (down arrow + Enter to select, then type name), choice 2 with invalid-then-valid name (backspace to clear after validation error), choice 2 with existing-then-new name, Ctrl+C during name input
   - Note: tap keeps field content after validation error, so tests must emit backspace characters to clear before typing corrected input
 - Unit tests: `internal/plan/planner_test.go`, `internal/plan/prompt_test.go`
-  - Phase 1 interactive chat flow via tap.Text (TTY mode) and scanner (piped mode)
+  - Phase 1 interactive chat flow via tap.Textarea (TTY mode) and scanner (piped mode)
   - Phase 2 document generation
   - Prompt rendering with template variables
   - Option application (WithBrief, WithOutput, WithInput, WithInteractive)
   - Resume mode with interactive input
   - Interactive abort paths: Ctrl+C, Escape, context cancellation
   - Multiple message exchanges in interactive mode
-- Interactive input tests (tap.Text): `internal/plan/planner_test.go`
+- Interactive input tests (tap.Textarea): `internal/plan/planner_test.go`
   - User message submission with /done command
   - Case-insensitive /done handling
   - Empty input validation (rejected by Validate func)
@@ -265,8 +267,8 @@ After successful completion:
   - Context cancellation
   - Multiple message exchanges
   - Resume mode behavior
-- TAP Text integration tests: `internal/plan/tap_integration_test.go`
-  - Validates tap.Text input component from `github.com/yarlson/tap` library
+- TAP Textarea integration tests: `internal/plan/tap_integration_test.go`
+  - Validates tap.Textarea input component from `github.com/yarlson/tap` library
   - Tests via mock I/O: submit with content, validation rejection (empty input), Ctrl+C abort, Escape abort, context cancellation
 
 ## Command Implementation

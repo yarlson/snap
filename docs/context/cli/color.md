@@ -75,9 +75,6 @@ Automatic color disabling in non-interactive environments.
 **E2E tests** (`cmd/root_test.go`):
 
 - `TestE2E_NoColor_VersionOutputClean()` — Builds snap binary, runs with NO_COLOR=1, verifies no escape sequences in output
-- `TestE2E_NonTTY_DisablesColorsAutomatically()` — Creates project, pipes stdout, verifies colors auto-disabled without NO_COLOR env var
-
-**Helper function**: `filterEnv()` in root_test.go — Removes specific env vars from test environment for isolation
 
 ## Integration Points
 

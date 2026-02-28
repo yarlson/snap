@@ -38,7 +38,7 @@ Task orchestration, runner, state management, and task discovery.
 Command-line interface features and functionality.
 
 - [`cli/run.md`](cli/run.md) — Run command with session support, named sessions, auto-detection, legacy fallback, session resolution logic, testing
-- [`cli/plan.md`](cli/plan.md) — Plan command, two-phase planning pipeline, conflict guard with tap.Select/tap.Text, interactive input (TTY) and buffered scanner input (pipes), autonomous document generation, --from flag, session resolution, plan resumption, provider integration
+- [`cli/plan.md`](cli/plan.md) — Plan command, two-phase planning pipeline, conflict guard with tap.Select/tap.Text, interactive input via tap.Textarea (TTY) and buffered scanner input (pipes), autonomous document generation, --from flag, session resolution, plan resumption, provider integration
 - [`cli/status.md`](cli/status.md) — Status command, session status display, task completion state, step progress, session resolution, output formatting
 - [`cli/versioning.md`](cli/versioning.md) — Version flag implementation, build-time injection via ldflags, E2E testing, usage examples
 - [`cli/provider.md`](cli/provider.md) — Provider CLI validation, pre-flight checks, error formatting, provider metadata, cross-provider support

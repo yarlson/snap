@@ -70,8 +70,8 @@ func WithAfterFirstMessage(fn func() error) PlannerOption {
 }
 
 // WithInteractive enables interactive input via tap during Phase 1.
-// When true, the planner uses tap.Text for styled TTY input with
-// Ctrl+C/Escape abort support.
+// When true, the planner uses tap.Textarea for styled multiline TTY input
+// with Ctrl+C/Escape abort support.
 func WithInteractive(interactive bool) PlannerOption {
 	return func(p *Planner) { p.interactive = interactive }
 }
@@ -164,7 +164,7 @@ func (p *Planner) gatherRequirements(ctx context.Context) error {
 	return p.gatherRequirementsScanner(ctx)
 }
 
-// gatherRequirementsInteractive uses tap.Text for interactive TTY input.
+// gatherRequirementsInteractive uses tap.Textarea for interactive TTY input.
 // Ctrl+C or Escape returns context.Canceled to abort the plan command.
 func (p *Planner) gatherRequirementsInteractive(ctx context.Context) error {
 	for {
@@ -174,8 +174,8 @@ func (p *Planner) gatherRequirementsInteractive(ctx context.Context) error {
 
 		fmt.Fprint(p.output, "\n")
 
-		result := tap.Text(ctx, tap.TextOptions{
-			Message:     "snap plan>",
+		result := tap.Textarea(ctx, tap.TextareaOptions{
+			Message:     "Your response",
 			Placeholder: "Describe your requirements, or /done to finish",
 			Validate: func(s string) error {
 				if strings.TrimSpace(s) == "" {

@@ -502,7 +502,7 @@ func TestPlanner_AfterFirstMessage_WithBrief(t *testing.T) {
 func emitString(in *tap.MockReadable, s string) {
 	for _, ch := range s {
 		str := string(ch)
-		in.EmitKeypress(str, tap.Key{Name: str})
+		in.EmitKeypress(str, tap.Key{Name: str, Rune: ch})
 	}
 }
 
