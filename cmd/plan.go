@@ -178,13 +178,14 @@ func checkPlanConflict(sessionName string, isTTY bool, stdin io.Reader, stdout i
 
 	// TTY: display prompt and read single-character choice.
 	prompt := fmt.Sprintf("Session %q already has planning artifacts.\n\n"+
-		"  [1] Clean up and re-plan this session\n\n",
+		"  [1] Clean up and re-plan this session\n"+
+		"  [2] Create a new session\n\n",
 		sessionName)
 	fmt.Fprint(stdout, prompt)
 
 	label := ui.ResolveStyle(ui.WeightBold) +
 		ui.ResolveColor(ui.ColorSecondary) +
-		"Choice (1): " +
+		"Choice (1/2): " +
 		ui.ResolveStyle(ui.WeightNormal)
 	fmt.Fprint(stdout, label)
 
@@ -205,12 +206,70 @@ func checkPlanConflict(sessionName string, isTTY bool, stdin io.Reader, stdout i
 				return "", fmt.Errorf("clean session: %w", err)
 			}
 			return sessionName, nil
+		case '2':
+			fmt.Fprint(stdout, "2\r\n")
+			// Drain the trailing newline left by cooked-mode line buffering
+			// when the user presses Enter after '2'. Only drain on real terminals (with Fd).
+			type fder interface{ Fd() uintptr }
+			if _, ok := stdin.(fder); ok {
+				drain := make([]byte, 1)
+				stdin.Read(drain) //nolint:errcheck // consume stale newline from cooked-mode input
+			}
+			return promptNewSession(stdin, stdout)
 		case 3: // Ctrl+C
 			fmt.Fprint(stdout, "\r\n")
 			return "", input.ErrInterrupt
 		}
 		// All other bytes: ignore.
 	}
+}
+
+// promptNewSession displays a "Session name:" prompt, validates the input,
+// creates the session, and returns the new session name. Invalid names and
+// existing session names trigger a re-prompt.
+func promptNewSession(stdin io.Reader, stdout io.Writer) (string, error) {
+	nameLoop := func() (string, error) {
+		for {
+			name, err := input.ReadLine(stdin, stdout, "Session name: ")
+			if err != nil {
+				return "", err
+			}
+			name = strings.TrimSpace(name)
+
+			if err := session.ValidateName(name); err != nil {
+				msg := err.Error()
+				if msg != "" {
+					msg = strings.ToUpper(msg[:1]) + msg[1:]
+				}
+				fmt.Fprintf(stdout, "%s\r\n", msg)
+				continue
+			}
+
+			if session.Exists(".", name) {
+				fmt.Fprintf(stdout, "Session %q already exists\r\n", name)
+				continue
+			}
+
+			if err := session.Create(".", name); err != nil {
+				return "", err
+			}
+			return name, nil
+		}
+	}
+
+	// Enter raw mode if stdin supports it (real terminal).
+	// In tests, stdin is a bytes.Reader and raw mode is not needed.
+	type fder interface{ Fd() uintptr }
+	if f, ok := stdin.(fder); ok {
+		var result string
+		err := input.WithRawMode(int(f.Fd()), func() error {
+			var innerErr error
+			result, innerErr = nameLoop()
+			return innerErr
+		})
+		return result, err
+	}
+	return nameLoop()
 }
 
 // printFileListing prints all files found in the tasks directory.
