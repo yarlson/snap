@@ -111,11 +111,10 @@ Planner supports two input modes:
 
 ### Phase 2: Autonomous Document Generation
 
-- Claude generates 4 planning documents based on brief:
+- Claude generates 4 planning documents based on brief via a 3-step pipeline:
   1. **PRD.md** — Product requirements document (features, acceptance criteria, scope)
-  2. **TECHNOLOGY.md** — Technology decisions and architecture overview
-  3. **DESIGN.md** — High-level design specification
-  4. **TASK\*.md** — Individual task files (TASK1.md, TASK2.md, etc.)
+  2. **TECHNOLOGY.md** and **DESIGN.md** — Technology decisions and design specification (generated in parallel)
+  3. **TASK\*.md** — Individual task files (TASK1.md, TASK2.md, etc.)
 - Each document generated via LLM call with specialized prompt template
 - **Engineering principles preamble**: All Phase 2 prompts are prepended with shared engineering principles (KISS, DRY, SOLID, YAGNI) to guide consistent decision-making across all generated documents
 - Documents written to `.snap/sessions/<session>/tasks/`
@@ -123,14 +122,26 @@ Planner supports two input modes:
 
 Phase 2 flow:
 
-1. For each plan step (PRD, Technology, Design, Tasks):
-   - Render specialized prompt template
-   - Prepend engineering principles preamble to guide decision-making
+1. **Step 1 (Sequential)**: Generate PRD
+   - Render PRD prompt template
+   - Prepend engineering principles preamble
    - Call LLM executor
-   - Write output to tasks directory with appropriate filename
+   - Write PRD.md to tasks directory
    - Display step completion
-2. Print file listing showing generated files
-3. Print "Run: snap run <session>" suggestion
+2. **Step 2 (Parallel)**: Generate TECHNOLOGY.md and DESIGN.md concurrently
+   - Render TECHNOLOGY and DESIGN prompt templates
+   - Prepend engineering principles preamble to both
+   - Call LLM executor for both concurrently via errgroup
+   - Write TECHNOLOGY.md and DESIGN.md to tasks directory
+   - Display individual sub-step completions with timing
+3. **Step 3 (Sequential)**: Generate task files
+   - Render task-splitting prompt template
+   - Prepend engineering principles preamble
+   - Call LLM executor to split PRD+TECHNOLOGY+DESIGN into individual tasks
+   - Write TASK\*.md files to tasks directory
+   - Display step completion
+4. Print file listing showing generated files
+5. Print "Run: snap run <session>" suggestion
 
 ### Engineering Principles
 

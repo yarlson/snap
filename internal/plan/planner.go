@@ -17,19 +17,6 @@ import (
 	"github.com/yarlson/snap/internal/workflow"
 )
 
-// planStep defines one step in the Phase 2 generation pipeline.
-type planStep struct {
-	name       string
-	renderFunc func(tasksDir, brief string) (string, error)
-}
-
-var planSteps = []planStep{
-	{name: "Generate PRD", renderFunc: RenderPRDPrompt},
-	{name: "Generate technology plan", renderFunc: func(td, _ string) (string, error) { return RenderTechnologyPrompt(td) }},
-	{name: "Generate design spec", renderFunc: func(td, _ string) (string, error) { return RenderDesignPrompt(td) }},
-	{name: "Split into tasks", renderFunc: func(td, _ string) (string, error) { return RenderTasksPrompt(td) }},
-}
-
 // Planner orchestrates the two-phase planning pipeline.
 type Planner struct {
 	executor          workflow.Executor
@@ -240,59 +227,133 @@ func (p *Planner) gatherRequirementsScanner(ctx context.Context) error {
 }
 
 // generateDocuments runs the autonomous Phase 2 document generation pipeline.
+// Pipeline: PRD (sequential) → TECHNOLOGY + DESIGN (parallel) → task splitting (sequential).
 func (p *Planner) generateDocuments(ctx context.Context) error {
 	fmt.Fprint(p.output, ui.Step("Generating planning documents..."))
 
-	for i, step := range planSteps {
-		stepNum := i + 1
+	const totalSteps = 3
+
+	// --- Step 1/3: Generate PRD (sequential) ---
+	if ctx.Err() != nil {
+		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 1/%d", totalSteps)))
+		fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+		return ctx.Err()
+	}
+
+	prdPrompt, err := RenderPRDPrompt(p.tasksDir, p.briefBody)
+	if err != nil {
+		return fmt.Errorf("failed to render Generate PRD prompt: %w", err)
+	}
+
+	var prdArgs []string
+	// In --from mode, first call starts a fresh conversation (no -c).
+	// Otherwise, -c continues from Phase 1 conversation.
+	if p.briefBody == "" {
+		prdArgs = append(prdArgs, "-c")
+	}
+	prdArgs = append(prdArgs, prdPrompt)
+
+	fmt.Fprint(p.output, ui.StepNumbered(1, totalSteps, "Generate PRD"))
+
+	start := time.Now()
+	if err := p.executor.Run(ctx, p.output, model.Thinking, prdArgs...); err != nil {
+		elapsed := time.Since(start)
+		fmt.Fprintln(p.output, ui.StepFailed("Step failed", elapsed))
 
 		if ctx.Err() != nil {
-			fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step %d/%d", stepNum, len(planSteps))))
+			fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 1/%d", totalSteps)))
 			fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
 			return ctx.Err()
 		}
-
-		prompt, err := step.renderFunc(p.tasksDir, p.briefBody)
-		if err != nil {
-			return fmt.Errorf("failed to render %s prompt: %w", step.name, err)
-		}
-
-		// Build args: first step in --from mode has no -c (fresh conversation).
-		// All other steps use -c for conversation continuity.
-		var args []string
-		needsContinuation := true
-		if p.briefBody != "" && i == 0 {
-			needsContinuation = false
-		}
-		if needsContinuation {
-			args = append(args, "-c")
-		}
-		args = append(args, prompt)
-
-		fmt.Fprint(p.output, ui.StepNumbered(stepNum, len(planSteps), step.name))
-
-		start := time.Now()
-		if err := p.executor.Run(ctx, p.output, model.Thinking, args...); err != nil {
-			elapsed := time.Since(start)
-			fmt.Fprintln(p.output, ui.StepFailed("Step failed", elapsed))
-
-			// Check if this is a context cancellation.
-			if ctx.Err() != nil {
-				fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step %d/%d", stepNum, len(planSteps))))
-				fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
-				return ctx.Err()
-			}
-
-			return fmt.Errorf("step %d/%d %q failed: %w", stepNum, len(planSteps), step.name, err)
-		}
-
-		if err := p.onFirstMessage(); err != nil {
-			return err
-		}
-
-		elapsed := time.Since(start)
-		fmt.Fprintln(p.output, ui.StepComplete("Step complete", elapsed))
+		return fmt.Errorf("step 1/%d %q failed: %w", totalSteps, "Generate PRD", err)
 	}
+
+	if err := p.onFirstMessage(); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(p.output, ui.StepComplete("Step complete", time.Since(start)))
+
+	// --- Step 2/3: Generate technology plan + design spec (parallel) ---
+	if ctx.Err() != nil {
+		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 2/%d", totalSteps)))
+		fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+		return ctx.Err()
+	}
+
+	techPrompt, err := RenderTechnologyPrompt(p.tasksDir)
+	if err != nil {
+		return fmt.Errorf("failed to render technology prompt: %w", err)
+	}
+
+	designPrompt, err := RenderDesignPrompt(p.tasksDir)
+	if err != nil {
+		return fmt.Errorf("failed to render design prompt: %w", err)
+	}
+
+	tasks := []parallelTask{
+		{name: "Technology plan", modelType: model.Thinking, args: []string{techPrompt}},
+		{name: "Design spec", modelType: model.Thinking, args: []string{designPrompt}},
+	}
+
+	fmt.Fprint(p.output, ui.StepNumbered(2, totalSteps, "Generate technology plan + design spec"))
+
+	results := runParallel(ctx, p.executor, tasks)
+
+	// Print sub-step results and check for failures.
+	var parallelFailed bool
+	for _, r := range results {
+		if r.err != nil {
+			fmt.Fprintln(p.output, ui.StepFailed(r.name, r.elapsed))
+			parallelFailed = true
+		} else {
+			fmt.Fprintln(p.output, ui.StepComplete(r.name, r.elapsed))
+		}
+	}
+
+	if parallelFailed {
+		if ctx.Err() != nil {
+			fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 2/%d", totalSteps)))
+			fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+			return ctx.Err()
+		}
+		var errs []string
+		for _, r := range results {
+			if r.err != nil {
+				errs = append(errs, fmt.Sprintf("%s: %v", r.name, r.err))
+			}
+		}
+		return fmt.Errorf("step 2/%d failed: %s", totalSteps, strings.Join(errs, "; "))
+	}
+
+	// --- Step 3/3: Split into tasks (sequential, -c continues PRD conversation) ---
+	if ctx.Err() != nil {
+		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 3/%d", totalSteps)))
+		fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+		return ctx.Err()
+	}
+
+	tasksPrompt, err := RenderTasksPrompt(p.tasksDir)
+	if err != nil {
+		return fmt.Errorf("failed to render Split into tasks prompt: %w", err)
+	}
+
+	fmt.Fprint(p.output, ui.StepNumbered(3, totalSteps, "Split into tasks"))
+
+	start = time.Now()
+	if err := p.executor.Run(ctx, p.output, model.Thinking, "-c", tasksPrompt); err != nil {
+		elapsed := time.Since(start)
+		fmt.Fprintln(p.output, ui.StepFailed("Step failed", elapsed))
+
+		if ctx.Err() != nil {
+			fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 3/%d", totalSteps)))
+			fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+			return ctx.Err()
+		}
+		return fmt.Errorf("step 3/%d %q failed: %w", totalSteps, "Split into tasks", err)
+	}
+
+	fmt.Fprintln(p.output, ui.StepComplete("Step complete", time.Since(start)))
 
 	fmt.Fprintln(p.output)
 	fmt.Fprintln(p.output, ui.Complete("Planning complete"))

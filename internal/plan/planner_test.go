@@ -51,6 +51,23 @@ func (m *mockExecutor) getCalls() []executorCall {
 	return result
 }
 
+// promptMatchExecutor returns per-prompt errors based on a substring match.
+type promptMatchExecutor struct {
+	failOn map[string]error // substring → error
+}
+
+func (m *promptMatchExecutor) Run(_ context.Context, w io.Writer, _ model.Type, args ...string) error {
+	prompt := args[len(args)-1]
+	for substr, err := range m.failOn {
+		if strings.Contains(prompt, substr) {
+			return err
+		}
+	}
+
+	fmt.Fprintln(w, "LLM response")
+	return nil
+}
+
 // --- Phase 1 tests ---
 
 func TestPlanner_Phase1_UserMessageThenDone(t *testing.T) {
@@ -97,8 +114,8 @@ func TestPlanner_Phase1_DoneImmediately(t *testing.T) {
 	require.GreaterOrEqual(t, len(calls), 1)
 	assert.NotContains(t, calls[0].args, "-c")
 
-	// Phase 2 should still run (4 generation steps)
-	// Total: 1 (requirements prompt) + 4 (generation steps) = 5
+	// Phase 2 pipeline: 1 (PRD) + 2 (parallel TECH+DESIGN) + 1 (task split) = 4
+	// Total: 1 (requirements prompt) + 4 = 5
 	assert.Equal(t, 5, len(calls))
 }
 
@@ -159,7 +176,7 @@ func TestPlanner_Phase1_ContextCancel(t *testing.T) {
 
 // --- Phase 2 tests ---
 
-func TestPlanner_Phase2_FourSteps(t *testing.T) {
+func TestPlanner_Phase2_Pipeline(t *testing.T) {
 	exec := &mockExecutor{}
 	var out bytes.Buffer
 
@@ -172,17 +189,26 @@ func TestPlanner_Phase2_FourSteps(t *testing.T) {
 	require.NoError(t, err)
 
 	calls := exec.getCalls()
-	// Requirements prompt + 4 generation steps = 5 total calls.
-	assert.Equal(t, 5, len(calls))
+	// Requirements prompt + 4 generation calls (1 PRD + 2 parallel + 1 tasks) = 5.
+	require.Equal(t, 5, len(calls))
 
-	// All Phase 2 calls should use -c flag and model.Thinking
+	// All Phase 2 calls should use model.Thinking.
 	for i := 1; i < 5; i++ {
-		assert.Contains(t, calls[i].args, "-c", "step %d should have -c flag", i)
-		assert.Equal(t, model.Thinking, calls[i].modelType, "step %d should use Thinking model", i)
+		assert.Equal(t, model.Thinking, calls[i].modelType, "call %d should use Thinking model", i)
 	}
+
+	// Call 1 (PRD): has -c (continues Phase 1 conversation).
+	assert.Contains(t, calls[1].args, "-c", "PRD step should have -c")
+
+	// Calls 2,3 (parallel TECH+DESIGN): no -c (independent processes).
+	assert.NotContains(t, calls[2].args, "-c", "parallel call should not have -c")
+	assert.NotContains(t, calls[3].args, "-c", "parallel call should not have -c")
+
+	// Call 4 (task split): has -c (continues PRD conversation).
+	assert.Contains(t, calls[4].args, "-c", "task split should have -c")
 }
 
-func TestPlanner_Phase2_StepHeaders(t *testing.T) {
+func TestPlanner_Phase2_StepHeaders_NewPipeline(t *testing.T) {
 	exec := &mockExecutor{}
 	var out bytes.Buffer
 
@@ -195,13 +221,11 @@ func TestPlanner_Phase2_StepHeaders(t *testing.T) {
 	require.NoError(t, err)
 
 	output := out.String()
-	assert.Contains(t, output, "Step 1/4")
-	assert.Contains(t, output, "Step 2/4")
-	assert.Contains(t, output, "Step 3/4")
-	assert.Contains(t, output, "Step 4/4")
+	assert.Contains(t, output, "Step 1/3")
+	assert.Contains(t, output, "Step 2/3")
+	assert.Contains(t, output, "Step 3/3")
 	assert.Contains(t, output, "Generate PRD")
-	assert.Contains(t, output, "Generate technology plan")
-	assert.Contains(t, output, "Generate design spec")
+	assert.Contains(t, output, "Generate technology plan + design spec")
 	assert.Contains(t, output, "Split into tasks")
 }
 
@@ -218,16 +242,170 @@ func TestPlanner_Phase2_StepCompletions(t *testing.T) {
 	require.NoError(t, err)
 
 	output := out.String()
-	// Step complete markers should appear (4 times)
-	assert.Equal(t, 4, strings.Count(output, "Step complete"))
+	// Steps 1 and 3 produce "Step complete"; step 2 produces sub-step names.
+	assert.Equal(t, 2, strings.Count(output, "Step complete"))
+}
+
+func TestPlanner_Phase2_ParallelDocs(t *testing.T) {
+	exec := &mockExecutor{}
+	var out bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("/done\n")),
+	)
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	calls := exec.getCalls()
+	// 1 (requirements) + 1 (PRD) + 2 (parallel TECH+DESIGN) + 1 (tasks) = 5
+	require.Equal(t, 5, len(calls))
+
+	// The two parallel calls (indices 2,3) should lack -c and use model.Thinking.
+	for _, i := range []int{2, 3} {
+		assert.NotContains(t, calls[i].args, "-c", "parallel call %d should not have -c", i)
+		assert.Equal(t, model.Thinking, calls[i].modelType, "parallel call %d should use Thinking", i)
+	}
+
+	// Sub-step completion lines should appear in output.
+	output := out.String()
+	assert.Contains(t, output, "Technology plan")
+	assert.Contains(t, output, "Design spec")
+}
+
+func TestPlanner_Phase2_ParallelDocOneFails(t *testing.T) {
+	exec := &promptMatchExecutor{
+		failOn: map[string]error{
+			"DESIGN.md": fmt.Errorf("design generation failed"),
+		},
+	}
+	var out bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("/done\n")),
+	)
+
+	err := p.Run(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "step 2/3 failed")
+
+	output := out.String()
+	// One sub-step succeeded, one failed.
+	assert.Contains(t, output, "Technology plan")
+	assert.Contains(t, output, "Design spec")
+}
+
+func TestPlanner_Phase2_ParallelDocBothFail(t *testing.T) {
+	exec := &promptMatchExecutor{
+		failOn: map[string]error{
+			"TECHNOLOGY.md": fmt.Errorf("tech failed"),
+			"DESIGN.md":     fmt.Errorf("design failed"),
+		},
+	}
+	var out bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("/done\n")),
+	)
+
+	err := p.Run(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "step 2/3 failed")
+
+	output := out.String()
+	// Both failures reported in output.
+	assert.Contains(t, output, "Technology plan")
+	assert.Contains(t, output, "Design spec")
+}
+
+func TestPlanner_Phase2_ContextCancel_BeforeParallel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Cancel after 2 calls (requirements + PRD), so context is cancelled before parallel step starts.
+	cancellingExec := &cancellingMockExecutor{
+		cancelAfter: 2,
+		cancel:      cancel,
+	}
+
+	var out bytes.Buffer
+
+	p := NewPlanner(cancellingExec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("/done\n")),
+	)
+
+	err := p.Run(ctx)
+	require.Error(t, err)
+
+	output := out.String()
+	assert.Contains(t, output, "Planning aborted at step 2/3")
+}
+
+func TestPlanner_Phase2_SubStepTimings(t *testing.T) {
+	exec := &mockExecutor{}
+	var out bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("/done\n")),
+	)
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	output := out.String()
+	// Sub-step completion lines should contain durations (e.g., "0s" for fast mock).
+	// StepComplete renders: " ✓ <name>  <duration>"
+	// With the mock executor the duration will be very short ("0s").
+	assert.Contains(t, output, "Technology plan")
+	assert.Contains(t, output, "Design spec")
+	assert.Contains(t, output, "0s")
+}
+
+func TestPlanner_Phase2_FromMode_Parallel(t *testing.T) {
+	exec := &mockExecutor{}
+	var out bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithBrief("brief.md", "I want OAuth2 with Google"),
+	)
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	calls := exec.getCalls()
+	// Only Phase 2: 1 (PRD) + 2 (parallel) + 1 (tasks) = 4
+	require.Equal(t, 4, len(calls))
+
+	// PRD (call 0): no -c (--from mode, fresh conversation).
+	assert.NotContains(t, calls[0].args, "-c", "PRD in --from mode should not have -c")
+
+	// Parallel calls (1,2): no -c.
+	assert.NotContains(t, calls[1].args, "-c", "parallel call should not have -c")
+	assert.NotContains(t, calls[2].args, "-c", "parallel call should not have -c")
+
+	// Task split (call 3): has -c.
+	assert.Contains(t, calls[3].args, "-c", "task split should have -c")
+
+	// PRD prompt should contain the brief.
+	firstPrompt := calls[0].args[len(calls[0].args)-1]
+	assert.Contains(t, firstPrompt, "I want OAuth2 with Google")
+
+	output := out.String()
+	assert.Contains(t, output, "using brief.md as input")
+	assert.Contains(t, output, "Planning complete")
 }
 
 func TestPlanner_Phase2_ContextCancelMidStep(t *testing.T) {
-	// Override: cancel after requirements prompt + first generation step
+	// Cancel after requirements prompt + first generation step (PRD).
 	ctx, cancel := context.WithCancel(context.Background())
 
 	cancellingExec := &cancellingMockExecutor{
-		cancelAfter: 2, // cancel after 2nd call (requirements + first gen step)
+		cancelAfter: 2, // cancel after 2nd call (requirements + PRD)
 		cancel:      cancel,
 	}
 
@@ -293,10 +471,13 @@ func TestPlanner_FullPipeline(t *testing.T) {
 		assert.Contains(t, calls[i].args, "-c")
 	}
 
-	// Generation steps (with -c)
-	for i := 3; i <= 6; i++ {
-		assert.Contains(t, calls[i].args, "-c")
-	}
+	// PRD (call 3): -c
+	assert.Contains(t, calls[3].args, "-c")
+	// Parallel calls (4,5): no -c
+	assert.NotContains(t, calls[4].args, "-c")
+	assert.NotContains(t, calls[5].args, "-c")
+	// Task split (call 6): -c
+	assert.Contains(t, calls[6].args, "-c")
 
 	output := out.String()
 	assert.Contains(t, output, "Planning session")
@@ -318,18 +499,20 @@ func TestPlanner_WithBrief_SkipsPhase1(t *testing.T) {
 	require.NoError(t, err)
 
 	calls := exec.getCalls()
-	// Only Phase 2: 4 generation steps (no requirements prompt, no user messages)
+	// Only Phase 2: 1 (PRD) + 2 (parallel) + 1 (tasks) = 4
 	assert.Equal(t, 4, len(calls))
 
-	// First gen step should NOT have -c (fresh conversation start)
+	// First gen step (PRD) should NOT have -c (fresh conversation start).
 	assert.NotContains(t, calls[0].args, "-c")
 
-	// Remaining gen steps should have -c
-	for i := 1; i < 4; i++ {
-		assert.Contains(t, calls[i].args, "-c")
-	}
+	// Parallel calls (1,2): no -c.
+	assert.NotContains(t, calls[1].args, "-c")
+	assert.NotContains(t, calls[2].args, "-c")
 
-	// PRD prompt should contain the brief
+	// Task split (call 3): has -c.
+	assert.Contains(t, calls[3].args, "-c")
+
+	// PRD prompt should contain the brief.
 	firstPrompt := calls[0].args[len(calls[0].args)-1]
 	assert.Contains(t, firstPrompt, "I want OAuth2 with Google")
 
@@ -729,7 +912,7 @@ func TestPlanner_Phase2_PreambleInPrompts(t *testing.T) {
 	require.NoError(t, err)
 
 	calls := exec.getCalls()
-	// Requirements prompt + 4 generation steps = 5 total calls.
+	// Requirements prompt + 4 generation calls = 5 total.
 	require.Equal(t, 5, len(calls))
 
 	// All 4 Phase 2 calls (indices 1-4) should contain preamble text.
