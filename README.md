@@ -1,8 +1,21 @@
 # snap
 
-Describe what you want. Get committed code.
+Without snap, this is your afternoon:
 
-snap is a CLI that takes your requirements, breaks them into tasks, and implements each one autonomously — tested, reviewed, and committed. Describe a feature, `snap plan`, `snap run`, come back to clean commits. No babysitting. No copy-pasting prompts.
+```
+You: "implement auth middleware"  →  Claude writes it
+You: "run the tests"              →  they fail
+You: "fix the failing test"       →  Claude fixes it
+You: "review the code"            →  2 issues found
+You: "fix those"                  →  Claude fixes them
+You: "run tests again"            →  pass
+You: "commit this"                →  done
+You: "now do task 2..."           →  repeat from the top
+```
+
+Same loop, every task, one prompt at a time.
+
+snap runs the loop for you. `snap plan`, `snap run`, walk away. Come back to tested, reviewed, committed code.
 
 ## Quickstart
 
