@@ -70,6 +70,7 @@ Workflow Runner (orchestrates 10-step iteration workflow)
 - **State inspection**: `--show-state` displays workflow progress in human-readable format; `--show-state --json` outputs raw state JSON; works with sessions
 - **Color output control**: NO_COLOR environment variable support (follows https://no-color.org/ standard); automatic color disabling in non-TTY contexts
 - **Auto-push and PR creation**: Upon workflow completion, automatically pushes commits to configured git remote (origin); on GitHub remotes, creates a pull request with LLM-generated title and description (using PRD context); skips PR if on default branch or PR already exists
+- **CI workflow monitoring**: Detects GitHub Actions workflows triggered by push or pull_request events; polls CI status after push/PR creation; displays status updates and final results; tracks individual checks (≤5) or summary view (>5 checks)
 - **CI/CD integration**: GitHub Actions workflow validates lint and race conditions on every push and PR
 - **Release automation**: Automated binary builds and GitHub Releases via GoReleaser (linux/darwin, amd64/arm64); triggered on version tag push; workflow enforces lint and test before release
 

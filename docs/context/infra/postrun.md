@@ -207,17 +207,4 @@ Post-run behavior is automatic and requires no user configuration:
 - If non-GitHub remote: Push succeeds, GitHub features skipped
 - If GitHub remote: Push succeeds, gh CLI pre-validated during startup
 
-## Implementation Status
-
-Current implementation includes:
-
-- ✅ Git push to remote
-- ✅ GitHub PR creation with LLM-generated title and body (TASK2)
-- ✅ CI status monitoring and polling (TASK3)
-
-Future tasks will add:
-
-- CI failure log reading and LLM-driven fix attempts (TASK4)
-- Auto-merge handling (post-TASK4)
-
 The PRD context is passed to the PR generation prompt to create meaningful PR descriptions that explain the *why* behind changes, not just raw diff summaries.
