@@ -84,7 +84,14 @@ func resolveStatusSession(args []string) (string, error) {
 
 	switch len(sessions) {
 	case 0:
-		return "", fmt.Errorf("no sessions found\n\nTo create a session:\n  snap new <name>")
+		// Check for legacy layout before creating default session.
+		if dirExists("docs/tasks") {
+			return "", fmt.Errorf("no sessions found\n\nTo create a session:\n  snap new <name>")
+		}
+		if err := session.EnsureDefault("."); err != nil {
+			return "", err
+		}
+		return "default", nil
 	case 1:
 		return sessions[0].Name, nil
 	default:

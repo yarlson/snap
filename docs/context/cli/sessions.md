@@ -227,6 +227,8 @@ var statusCmd = &cobra.Command{
 **statusRun function** (`cmd/status.go`):
 
 1. Resolves session name (explicit arg or auto-detect)
+   - If no sessions exist and no legacy layout: auto-creates "default" session via `session.EnsureDefault()`
+   - If legacy layout exists with no sessions: returns error directing user to create a session
 2. Calls `session.Status()` to retrieve session details
 3. Displays session name, path, and task list
 4. Shows completion state for each task with current step if in progress

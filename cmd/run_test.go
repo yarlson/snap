@@ -44,10 +44,15 @@ func TestResolveRunConfig_NoName_ZeroSessions_NoLegacy(t *testing.T) {
 	projectDir := t.TempDir()
 	chdir(t, projectDir)
 
-	_, err := resolveRunConfig("", "docs/tasks", "")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no sessions found")
-	assert.Contains(t, err.Error(), "snap new <name>")
+	rc, err := resolveRunConfig("", "docs/tasks", "")
+	require.NoError(t, err)
+
+	// Should auto-create "default" session and return its config.
+	assert.Equal(t, filepath.Join(".snap", "sessions", "default", "tasks"), rc.tasksDir)
+	assert.Equal(t, filepath.Join(".snap", "sessions", "default", "tasks", "PRD.md"), rc.prdPath)
+	assert.Equal(t, "default", rc.displayName)
+	assert.NotNil(t, rc.stateManager)
+	assert.False(t, rc.userSupplied)
 }
 
 func TestResolveRunConfig_NoName_ZeroSessions_LegacyTaskFiles(t *testing.T) {
@@ -65,6 +70,11 @@ func TestResolveRunConfig_NoName_ZeroSessions_LegacyTaskFiles(t *testing.T) {
 	assert.Equal(t, "docs/tasks", rc.tasksDir)
 	assert.Equal(t, "docs/tasks/PRD.md", rc.prdPath)
 	assert.Equal(t, "docs/tasks", rc.displayName)
+
+	// No "default" session should have been created.
+	defaultDir := filepath.Join(projectDir, ".snap", "sessions", "default")
+	_, err = os.Stat(defaultDir)
+	assert.True(t, os.IsNotExist(err), "default session should not be created when legacy layout exists")
 }
 
 func TestResolveRunConfig_NoName_ZeroSessions_LegacyStateFile(t *testing.T) {
@@ -91,6 +101,11 @@ func TestResolveRunConfig_NoName_ZeroSessions_LegacyStateFile(t *testing.T) {
 
 	assert.Equal(t, "docs/tasks", rc.tasksDir)
 	assert.Equal(t, "docs/tasks", rc.displayName)
+
+	// No "default" session should have been created.
+	defaultDir := filepath.Join(projectDir, ".snap", "sessions", "default")
+	_, err = os.Stat(defaultDir)
+	assert.True(t, os.IsNotExist(err), "default session should not be created when legacy state exists")
 }
 
 func TestResolveRunConfig_NoName_OneSession(t *testing.T) {
@@ -251,6 +266,42 @@ func TestResolveRunConfig_ShowStateWithSession(t *testing.T) {
 	require.NotNil(t, s)
 	assert.Equal(t, "TASK2", s.CurrentTaskID)
 	assert.Equal(t, 5, s.CurrentStep)
+}
+
+func TestResolveStateManager_ZeroSessions_CreatesDefault(t *testing.T) {
+	projectDir := t.TempDir()
+	chdir(t, projectDir)
+
+	// No sessions exist — resolveStateManager with empty name should auto-create "default".
+	sm, err := resolveStateManager("")
+	require.NoError(t, err)
+	assert.NotNil(t, sm)
+
+	// The "default" session directory should exist.
+	defaultDir := filepath.Join(projectDir, ".snap", "sessions", "default")
+	info, err := os.Stat(defaultDir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
+func TestResolveStateManager_ZeroSessions_LegacyTaskFiles(t *testing.T) {
+	projectDir := t.TempDir()
+	chdir(t, projectDir)
+
+	// Set up legacy layout with task files but no state file.
+	legacyDir := filepath.Join(projectDir, "docs", "tasks")
+	require.NoError(t, os.MkdirAll(legacyDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(legacyDir, "TASK1.md"), []byte("# Task 1\n"), 0o600))
+
+	// Should return legacy manager, not create default session.
+	sm, err := resolveStateManager("")
+	require.NoError(t, err)
+	assert.NotNil(t, sm)
+
+	// No "default" session should have been created.
+	defaultDir := filepath.Join(projectDir, ".snap", "sessions", "default")
+	_, err = os.Stat(defaultDir)
+	assert.True(t, os.IsNotExist(err), "default session should not be created when legacy task directory exists")
 }
 
 // chdir changes to the given directory and restores on cleanup.

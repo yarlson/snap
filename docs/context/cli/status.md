@@ -11,16 +11,18 @@ snap status [session]
 ## Session Resolution
 
 - **Explicit session**: `snap status auth-system` — shows status for specified session
-- **Auto-detect**: `snap status` — uses single existing session if exactly one exists; error with session list if multiple or none exist
+- **Auto-detect**: `snap status` — uses single existing session if exactly one exists; auto-creates "default" if none exist and no legacy layout
+- **Legacy layout**: If legacy `docs/tasks/` directory exists with no sessions, returns error directing user to create a session
 - **Error cases**:
-  - No sessions: "no sessions found\n\nTo create a session:\n snap new <name>"
+  - No sessions with legacy layout: "no sessions found\n\nTo create a session:\n snap new <name>"
   - Multiple sessions: Lists available sessions with task counts, prompts user to specify one
 
 Session resolution logic:
 
 1. If session name provided as arg → use it
 2. If no args → list all sessions
-   - 0 sessions: error
+   - 0 sessions with legacy layout: error
+   - 0 sessions with no legacy layout: auto-create "default" session and use it
    - 1 session: auto-use it
    - 2+ sessions: error with list and prompt
 
@@ -86,10 +88,12 @@ Located in `cmd/status.go`:
 ## Testing
 
 - Unit tests in `cmd/status_test.go`:
-  - Session resolution (explicit, auto-detect, errors)
-  - Output formatting with various task states
-  - Task count accuracy
-  - Step progress display
+  - `TestStatus_WithTasksAndActiveStep` — Output formatting with active task progress
+  - `TestStatus_NoTasks` — Session with no task files
+  - `TestStatus_NonexistentSession` — Error handling for missing session
+  - `TestStatus_AutoDetectSingleSession` — Auto-detection of single session
+  - `TestResolveStatusSession_ZeroSessions_CreatesDefault` — Auto-create "default" session when no sessions/legacy
+  - `TestResolveStatusSession_ZeroSessions_LegacyTaskFiles` — Error when legacy layout exists (prevents auto-create)
 
 ## Design Notes
 

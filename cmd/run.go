@@ -211,7 +211,10 @@ func resolveLegacyFallback(flagTasksDir, flagPRDPath string) (*runConfig, error)
 			userSupplied: true,
 		}, nil
 	}
-	return nil, fmt.Errorf("no sessions found\n\nTo create a session:\n  snap new <name>")
+	if err := session.EnsureDefault("."); err != nil {
+		return nil, err
+	}
+	return resolveNamedSession("default")
 }
 
 // dirExists checks if a directory exists.
@@ -274,8 +277,21 @@ func resolveStateManager(sessionName string) (workflow.StateManager, error) {
 
 	// Auto-detect for show-state: if exactly one session exists, use it.
 	sessions, err := session.List(".")
-	if err == nil && len(sessions) == 1 {
-		return state.NewManagerInDir(session.Dir(".", sessions[0].Name)), nil
+	if err == nil {
+		switch len(sessions) {
+		case 0:
+			// Legacy fallback: if a legacy state file or task directory exists, use the legacy manager.
+			legacyManager := state.NewManager()
+			if legacyManager.Exists() || dirExists("docs/tasks") {
+				return legacyManager, nil
+			}
+			if err := session.EnsureDefault("."); err != nil {
+				return nil, err
+			}
+			return state.NewManagerInDir(session.Dir(".", "default")), nil
+		case 1:
+			return state.NewManagerInDir(session.Dir(".", sessions[0].Name)), nil
+		}
 	}
 
 	return state.NewManager(), nil

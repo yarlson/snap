@@ -122,3 +122,47 @@ func TestStatus_AutoDetectSingleSession(t *testing.T) {
 	assert.Contains(t, output, "Session: auth")
 	assert.Contains(t, output, "TASK1")
 }
+
+func TestResolveStatusSession_ZeroSessions_CreatesDefault(t *testing.T) {
+	projectDir := t.TempDir()
+
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer func() { require.NoError(t, os.Chdir(origDir)) }()
+
+	// No sessions exist — should auto-create "default".
+	name, err := resolveStatusSession(nil)
+	require.NoError(t, err)
+	assert.Equal(t, "default", name)
+
+	// The "default" session directory should exist.
+	defaultDir := filepath.Join(projectDir, ".snap", "sessions", "default")
+	info, err := os.Stat(defaultDir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
+func TestResolveStatusSession_ZeroSessions_LegacyTaskFiles(t *testing.T) {
+	projectDir := t.TempDir()
+
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(projectDir))
+	defer func() { require.NoError(t, os.Chdir(origDir)) }()
+
+	// Set up legacy layout with task files but no sessions.
+	legacyDir := filepath.Join(projectDir, "docs", "tasks")
+	require.NoError(t, os.MkdirAll(legacyDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(legacyDir, "TASK1.md"), []byte("# Task 1\n"), 0o600))
+
+	// Should return error, not auto-create "default".
+	_, err = resolveStatusSession(nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no sessions found")
+
+	// No "default" session should have been created.
+	defaultDir := filepath.Join(projectDir, ".snap", "sessions", "default")
+	_, err = os.Stat(defaultDir)
+	assert.True(t, os.IsNotExist(err), "default session should not be created when legacy task directory exists")
+}

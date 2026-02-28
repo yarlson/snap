@@ -65,11 +65,11 @@ The `resolveRunConfig()` function determines the tasks directory, PRD path, disp
 - Checks if legacy layout exists:
   - Tasks directory is readable, OR
   - Legacy state.json exists at `.snap/state.json`
-- Display name: tasks directory path
-- State manager: Global legacy manager
-- State file location: `.snap/state.json`
-
-**Returns error** if neither sessions nor legacy layout found
+- If legacy layout found: Uses it with global legacy manager
+- If no legacy layout: Auto-creates "default" session via `session.EnsureDefault()`
+- Display name: tasks directory path (legacy) or "default" (auto-created)
+- State manager: Global legacy manager (legacy) or session-scoped manager (default session)
+- State file location: `.snap/state.json` (legacy) or `.snap/sessions/default/state.json` (default session)
 
 ### Auto-Detection Sequence
 
@@ -78,7 +78,8 @@ The `resolveRunConfig()` function determines the tasks directory, PRD path, disp
 1. If session name explicitly provided → resolve as named session
 2. List all sessions via `session.List(".")`
 3. Switch based on count:
-   - **0 sessions**: Fall back to legacy layout
+   - **0 sessions, legacy layout exists**: Fall back to legacy layout (docs/tasks/ or --tasks-dir)
+   - **0 sessions, no legacy layout**: Auto-create "default" session and use it
    - **1 session**: Auto-select that session
    - **2+ sessions**: Error with list and hint to specify `snap run <name>`
 
@@ -86,7 +87,7 @@ The `resolveRunConfig()` function determines the tasks directory, PRD path, disp
 
 - Named session not found: "Session 'auth' not found\n\nTo create it:\n snap new auth"
 - Multiple sessions without name: Lists each session with task counts
-- No sessions and no legacy layout: "No sessions found\n\nTo create a session:\n snap new <name>"
+- Legacy layout exists: Uses legacy layout if no sessions created yet
 
 ## State Manager Selection
 
@@ -136,15 +137,17 @@ Security validation is applied only to user-supplied paths:
 
 - `TestResolveRunConfig_NamedSession_Exists` — Named session resolution
 - `TestResolveRunConfig_NamedSession_NotFound` — Error handling for missing session
-- `TestResolveRunConfig_NoName_ZeroSessions_NoLegacy` — Error when no sessions/legacy
-- `TestResolveRunConfig_NoName_ZeroSessions_LegacyTaskFiles` — Legacy fallback with tasks
-- `TestResolveRunConfig_NoName_ZeroSessions_LegacyStateFile` — Legacy fallback with state.json
+- `TestResolveRunConfig_NoName_ZeroSessions_NoLegacy` — Auto-creates "default" session when no sessions/legacy
+- `TestResolveRunConfig_NoName_ZeroSessions_LegacyTaskFiles` — Legacy fallback with tasks (prevents auto-create)
+- `TestResolveRunConfig_NoName_ZeroSessions_LegacyStateFile` — Legacy fallback with state.json (prevents auto-create)
 - `TestResolveRunConfig_NoName_OneSession` — Auto-detection of single session
 - `TestResolveRunConfig_NoName_MultipleSessions` — Error with multiple sessions
 - `TestResolveRunConfig_SessionStateManager_IndependentFromLegacy` — Session/legacy isolation
 - `TestResolveRunConfig_SessionWhilePlanning` — Sessions during planning phase
 - `TestResolveRunConfig_FreshWithSession` — --fresh flag resets session state
 - `TestResolveRunConfig_ShowStateWithSession` — State inspection on session
+- `TestResolveStateManager_ZeroSessions_CreatesDefault` — Auto-create default for show-state
+- `TestResolveStateManager_ZeroSessions_LegacyTaskFiles` — Legacy fallback prevents auto-create for show-state
 
 **E2E tests** (`cmd/run_e2e_test.go`):
 
@@ -153,7 +156,8 @@ Security validation is applied only to user-supplied paths:
 - `TestE2E_CUJ4_AutoDetectSingleSession` — Auto-detection when one session exists
 - `TestE2E_CUJ5_LegacyFallback` — Legacy layout without sessions
 - `TestE2E_RunMultipleSessionsError` — Error when multiple sessions and no name given
-- `TestE2E_RunNoSessionsNoLegacyError` — Error when no sessions and no legacy layout
+- `TestE2E_RunFreshProject` — Auto-creates "default" session when no sessions/legacy
+- `TestE2E_ShowStateFreshProject` — Show-state auto-creates "default" session on fresh project
 - `TestE2E_RunNonexistentSession` — Error for nonexistent session
 - `TestE2E_ShowStateWithSession` — Show-state with session name
 - `TestE2E_FreshWithSessionState` — --fresh flag behavior

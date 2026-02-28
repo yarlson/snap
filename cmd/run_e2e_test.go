@@ -261,8 +261,8 @@ func TestE2E_RunMultipleSessionsError(t *testing.T) {
 	assert.Contains(t, outputStr, "snap run <name>")
 }
 
-// Test: snap run with no sessions and no legacy shows error.
-func TestE2E_RunNoSessionsNoLegacyError(t *testing.T) {
+// Test: snap run on fresh project auto-creates "default" session and proceeds.
+func TestE2E_RunFreshProject(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping E2E test in short mode")
 	}
@@ -278,11 +278,53 @@ func TestE2E_RunNoSessionsNoLegacyError(t *testing.T) {
 	run.Dir = projectDir
 	run.Env = append(os.Environ(), "PATH="+mockPath)
 	output, runErr := run.CombinedOutput()
-	require.Error(t, runErr)
 
 	outputStr := string(output)
-	assert.Contains(t, outputStr, "no sessions found")
-	assert.Contains(t, outputStr, "snap new <name>")
+
+	// Should NOT contain "no sessions found" error — the session was auto-created.
+	assert.NotContains(t, outputStr, "no sessions found")
+	// The run may fail because there are no tasks, but it should not fail
+	// because of missing sessions. The error about no task files is expected.
+	if runErr != nil {
+		assert.Contains(t, outputStr, "no task files found",
+			"error should be about missing tasks, not missing sessions")
+	}
+
+	// The "default" session directory should exist.
+	defaultSessionDir := filepath.Join(projectDir, ".snap", "sessions", "default")
+	info, err := os.Stat(defaultSessionDir)
+	require.NoError(t, err, "default session directory should exist")
+	assert.True(t, info.IsDir())
+
+	// Auto-creation should be silent — no "created" message in output.
+	assert.NotContains(t, outputStr, "created")
+}
+
+// Test: snap run --show-state on fresh project auto-creates "default" and shows state.
+func TestE2E_ShowStateFreshProject(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	binPath := buildSnap(t)
+	projectDir := t.TempDir()
+	ctx := context.Background()
+
+	run := exec.CommandContext(ctx, binPath, "run", "--show-state")
+	run.Dir = projectDir
+	output, err := run.CombinedOutput()
+	require.NoError(t, err, "snap run --show-state (fresh project) failed: %s", output)
+
+	outputStr := string(output)
+
+	// Should show "No state file exists" (default session created but no state yet).
+	assert.Contains(t, outputStr, "No state file exists")
+
+	// The "default" session directory should exist.
+	defaultSessionDir := filepath.Join(projectDir, ".snap", "sessions", "default")
+	info, err := os.Stat(defaultSessionDir)
+	require.NoError(t, err, "default session directory should exist")
+	assert.True(t, info.IsDir())
 }
 
 // Test: snap run <nonexistent> shows error with hint.
