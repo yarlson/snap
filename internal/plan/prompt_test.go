@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -79,6 +80,68 @@ func TestRenderTasksPrompt(t *testing.T) {
 	assert.Contains(t, result, "docs/context/")
 	assert.Contains(t, result, "Guardrails")
 	assert.Contains(t, result, "Completion")
+}
+
+func TestRenderPrinciplesPreamble(t *testing.T) {
+	preamble, err := RenderPrinciplesPreamble()
+	require.NoError(t, err)
+	assert.NotEmpty(t, preamble)
+	assert.Contains(t, preamble, "KISS")
+	assert.Contains(t, preamble, "DRY")
+	assert.Contains(t, preamble, "SOLID")
+	assert.Contains(t, preamble, "YAGNI")
+}
+
+func TestPrependPreamble(t *testing.T) {
+	result, err := prependPreamble("hello world")
+	require.NoError(t, err)
+
+	preamble, err := RenderPrinciplesPreamble()
+	require.NoError(t, err)
+
+	assert.True(t, strings.HasPrefix(result, preamble), "result should start with preamble")
+	assert.Contains(t, result, "\n\n")
+	assert.True(t, strings.HasSuffix(result, "hello world"), "result should end with original prompt")
+}
+
+func TestPreamblePrepended_PRD(t *testing.T) {
+	result, err := RenderPRDPrompt(".snap/sessions/auth/tasks", "")
+	require.NoError(t, err)
+
+	preamble, err := RenderPrinciplesPreamble()
+	require.NoError(t, err)
+
+	assert.True(t, strings.HasPrefix(result, preamble), "PRD prompt should start with preamble")
+}
+
+func TestPreamblePrepended_Technology(t *testing.T) {
+	result, err := RenderTechnologyPrompt(".snap/sessions/auth/tasks")
+	require.NoError(t, err)
+
+	preamble, err := RenderPrinciplesPreamble()
+	require.NoError(t, err)
+
+	assert.True(t, strings.HasPrefix(result, preamble), "Technology prompt should start with preamble")
+}
+
+func TestPreamblePrepended_Design(t *testing.T) {
+	result, err := RenderDesignPrompt(".snap/sessions/auth/tasks")
+	require.NoError(t, err)
+
+	preamble, err := RenderPrinciplesPreamble()
+	require.NoError(t, err)
+
+	assert.True(t, strings.HasPrefix(result, preamble), "Design prompt should start with preamble")
+}
+
+func TestPreamblePrepended_Tasks(t *testing.T) {
+	result, err := RenderTasksPrompt(".snap/sessions/auth/tasks")
+	require.NoError(t, err)
+
+	preamble, err := RenderPrinciplesPreamble()
+	require.NoError(t, err)
+
+	assert.True(t, strings.HasPrefix(result, preamble), "Tasks prompt should start with preamble")
 }
 
 func TestAllPrompts_ContainCodebaseExploration(t *testing.T) {

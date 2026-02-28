@@ -716,6 +716,30 @@ func TestPlanner_Interactive_MultipleMessages(t *testing.T) {
 	assert.Equal(t, "msg2", calls[2].args[len(calls[2].args)-1])
 }
 
+func TestPlanner_Phase2_PreambleInPrompts(t *testing.T) {
+	exec := &mockExecutor{}
+	var out bytes.Buffer
+
+	p := NewPlanner(exec, "auth", ".snap/sessions/auth/tasks",
+		WithOutput(&out),
+		WithInput(strings.NewReader("/done\n")),
+	)
+
+	err := p.Run(context.Background())
+	require.NoError(t, err)
+
+	calls := exec.getCalls()
+	// Requirements prompt + 4 generation steps = 5 total calls.
+	require.Equal(t, 5, len(calls))
+
+	// All 4 Phase 2 calls (indices 1-4) should contain preamble text.
+	for i := 1; i < 5; i++ {
+		prompt := calls[i].args[len(calls[i].args)-1]
+		assert.Contains(t, prompt, "simplest solution",
+			"Phase 2 step %d prompt should contain preamble text", i)
+	}
+}
+
 func TestPlanner_Interactive_WithResume(t *testing.T) {
 	in := tap.NewMockReadable()
 	out := tap.NewMockWritable()
