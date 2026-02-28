@@ -9,11 +9,11 @@ The `--show-state` flag displays workflow progress at any time, with support for
 **`--show-state`** — Display current workflow state and exit
 
 - Loads state from session-scoped (`.snap/sessions/<name>/state.json`) or legacy (`.snap/state.json`) location
-- Auto-detects session if none named explicitly:
+- Auto-detects session/legacy layout via `resolveStateManager()` if none named explicitly:
   - Single existing session: uses it
-  - Multiple sessions: error with session list
-  - No sessions, no legacy layout: auto-creates "default" session
-  - Legacy layout exists: uses legacy manager
+  - Multiple sessions: returns error (relies on explicit session name from `snap run <name> --show-state`)
+  - No sessions, legacy exists (state.json or `docs/tasks` directory): uses legacy manager
+  - No sessions, no legacy: auto-creates "default" session via `session.EnsureDefault()`
 - Displays human-readable summary by default
 - Can output raw JSON with `--json` flag
 - Exits immediately without running workflow

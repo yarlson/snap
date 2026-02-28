@@ -66,7 +66,7 @@ The `resolveRunConfig()` function determines the tasks directory, PRD path, disp
   - Tasks directory is readable, OR
   - Legacy state.json exists at `.snap/state.json`
 - If legacy layout found: Uses it with global legacy manager
-- If no legacy layout: Auto-creates "default" session via `session.EnsureDefault()`
+- If no legacy layout: Auto-creates "default" session via `session.EnsureDefault()` and resolves as named session
 - Display name: tasks directory path (legacy) or "default" (auto-created)
 - State manager: Global legacy manager (legacy) or session-scoped manager (default session)
 - State file location: `.snap/state.json` (legacy) or `.snap/sessions/default/state.json` (default session)
@@ -98,6 +98,20 @@ Session-scoped vs. legacy state is determined by what's resolved:
 - **Legacy layout**: Uses `state.NewManager()` → state.json at `.snap/state.json`
 
 State managers are independent: session state does not interfere with legacy state.
+
+### Show-State Session Resolution
+
+**Function**: `resolveStateManager(sessionName)` (used by `--show-state` flag)
+
+- If session name provided: Resolves as named session and returns its state manager
+- If no session name provided: Auto-detects via `session.List()`:
+  - **1 session**: Returns its state manager
+  - **0 sessions**:
+    - If legacy layout exists (state.json or `docs/tasks` directory): Returns legacy state manager
+    - If no legacy layout: Auto-creates "default" session and returns its state manager
+  - **2+ sessions**: Returns legacy manager (does not auto-select, requires explicit name from command line)
+
+This enables fresh projects to use `snap run --show-state` without requiring session creation first.
 
 ## Show State with Sessions
 

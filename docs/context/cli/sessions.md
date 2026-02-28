@@ -75,7 +75,7 @@ var newCmd = &cobra.Command{
 - Idempotent function that creates "default" session if it doesn't exist
 - Returns immediately if "default" already exists (no error, no re-creation)
 - Creates directory structure and initializes files same as `Create()`
-- Used by plan command to auto-create "default" session on fresh projects
+- Used by multiple commands to auto-create "default" session on fresh projects (plan, status, run, show-state)
 
 ### Delete Session Command
 

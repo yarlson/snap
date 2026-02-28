@@ -17,12 +17,12 @@ snap status [session]
   - No sessions with legacy layout: "no sessions found\n\nTo create a session:\n snap new <name>"
   - Multiple sessions: Lists available sessions with task counts, prompts user to specify one
 
-Session resolution logic:
+Session resolution logic (`resolveStatusSession()`):
 
-1. If session name provided as arg → use it
+1. If session name provided as arg → resolve and use it
 2. If no args → list all sessions
-   - 0 sessions with legacy layout: error
-   - 0 sessions with no legacy layout: auto-create "default" session and use it
+   - 0 sessions with legacy layout (`docs/tasks` exists): error directing user to create a session (prevents accidental auto-create)
+   - 0 sessions with no legacy layout: auto-create "default" session via `session.EnsureDefault()` and return it
    - 1 session: auto-use it
    - 2+ sessions: error with list and prompt
 
@@ -94,6 +94,10 @@ Located in `cmd/status.go`:
   - `TestStatus_AutoDetectSingleSession` — Auto-detection of single session
   - `TestResolveStatusSession_ZeroSessions_CreatesDefault` — Auto-create "default" session when no sessions/legacy
   - `TestResolveStatusSession_ZeroSessions_LegacyTaskFiles` — Error when legacy layout exists (prevents auto-create)
+
+- E2E tests in `cmd/status_e2e_test.go`:
+  - Full end-to-end workflows for status command with sessions
+  - Session resolution in realistic scenarios
 
 ## Design Notes
 
