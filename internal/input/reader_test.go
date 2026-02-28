@@ -332,12 +332,11 @@ func TestReader_WithTerminal_StopCleansUp(t *testing.T) {
 
 	// Stop should signal the reader to exit.
 	reader.Stop()
+	pw.Close() // Unblock the blocked Read so the goroutine can exit.
 
-	// Wait for reader to finish before closing the file to avoid race.
 	assert.Eventually(t, func() bool {
 		return reader.Done()
 	}, time.Second, 10*time.Millisecond)
 
-	pw.Close()
 	pr.Close()
 }
