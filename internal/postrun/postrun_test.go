@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -289,7 +290,7 @@ func TestRun_PRSkip_DetachedHead(t *testing.T) {
 	}
 
 	// Empty branch = detached HEAD
-	err := createPRFlow(context.Background(), cfg, "")
+	_, err := createPRFlow(context.Background(), cfg, "")
 	require.NoError(t, err)
 
 	output := buf.String()
@@ -405,4 +406,405 @@ func gitOutput(t *testing.T, dir string, args ...string) string {
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "git %v failed: %s", args, out)
 	return string(out)
+}
+
+func TestFormatCheckStatus_FewChecks(t *testing.T) {
+	checks := []CheckResult{
+		{Name: "lint", Status: "passed"},
+		{Name: "test", Status: "running"},
+		{Name: "build", Status: "pending"},
+	}
+	result := formatCheckStatus(checks)
+	assert.Equal(t, "lint: passed, test: running, build: pending", result)
+}
+
+func TestFormatCheckStatus_ManyChecks(t *testing.T) {
+	checks := []CheckResult{
+		{Name: "lint", Status: "passed"},
+		{Name: "test", Status: "passed"},
+		{Name: "build", Status: "passed"},
+		{Name: "e2e", Status: "running"},
+		{Name: "deploy", Status: "pending"},
+		{Name: "security", Status: "pending"},
+	}
+	result := formatCheckStatus(checks)
+	assert.Equal(t, "3 passed, 1 running, 2 pending", result)
+}
+
+func TestFormatCheckStatus_ManyChecks_AllPassed(t *testing.T) {
+	checks := make([]CheckResult, 6)
+	for i := range checks {
+		checks[i] = CheckResult{Name: fmt.Sprintf("check%d", i), Status: "passed"}
+	}
+	result := formatCheckStatus(checks)
+	assert.Equal(t, "6 passed", result)
+}
+
+func TestChecksChanged(t *testing.T) {
+	prev := []CheckResult{
+		{Name: "lint", Status: "running"},
+		{Name: "test", Status: "pending"},
+	}
+	curr := []CheckResult{
+		{Name: "lint", Status: "passed"},
+		{Name: "test", Status: "running"},
+	}
+	assert.True(t, checksChanged(prev, curr))
+}
+
+func TestChecksChanged_Identical(t *testing.T) {
+	checks := []CheckResult{
+		{Name: "lint", Status: "running"},
+		{Name: "test", Status: "pending"},
+	}
+	assert.False(t, checksChanged(checks, checks))
+}
+
+func TestChecksChanged_DifferentLength(t *testing.T) {
+	prev := []CheckResult{{Name: "lint", Status: "running"}}
+	curr := []CheckResult{
+		{Name: "lint", Status: "running"},
+		{Name: "test", Status: "pending"},
+	}
+	assert.True(t, checksChanged(prev, curr))
+}
+
+func TestChecksChanged_NilPrev(t *testing.T) {
+	curr := []CheckResult{{Name: "lint", Status: "running"}}
+	assert.True(t, checksChanged(nil, curr))
+}
+
+func TestAllCompleted(t *testing.T) {
+	assert.True(t, allCompleted([]CheckResult{
+		{Name: "lint", Status: "passed"},
+		{Name: "test", Status: "failed"},
+	}))
+	assert.False(t, allCompleted([]CheckResult{
+		{Name: "lint", Status: "passed"},
+		{Name: "test", Status: "running"},
+	}))
+	assert.False(t, allCompleted([]CheckResult{
+		{Name: "lint", Status: "passed"},
+		{Name: "test", Status: "pending"},
+	}))
+}
+
+func TestAnyFailed(t *testing.T) {
+	assert.True(t, anyFailed([]CheckResult{
+		{Name: "lint", Status: "passed"},
+		{Name: "test", Status: "failed"},
+	}))
+	assert.False(t, anyFailed([]CheckResult{
+		{Name: "lint", Status: "passed"},
+		{Name: "test", Status: "passed"},
+	}))
+}
+
+// addWorkflowFile creates a .github/workflows/ci.yml with a push trigger in the given repo root.
+func addWorkflowFile(t *testing.T, repoRoot string) {
+	t.Helper()
+	wfDir := filepath.Join(repoRoot, ".github", "workflows")
+	require.NoError(t, os.MkdirAll(wfDir, 0o755))
+	content := "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n"
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "ci.yml"), []byte(content), 0o600))
+}
+
+// mockGHWithCI creates a gh mock script that handles repo view, pr view, pr create, and pr checks.
+// checksJSON is returned for "gh pr checks" calls.
+func mockGHWithCI(t *testing.T, defaultBranch, prViewJSON, prCreateURL, checksJSON string) {
+	t.Helper()
+	binDir := t.TempDir()
+
+	var script strings.Builder
+	script.WriteString("#!/bin/sh\n")
+	script.WriteString("case \"$1 $2\" in\n")
+
+	// gh repo view
+	script.WriteString("  \"repo view\")\n")
+	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", defaultBranch))
+	script.WriteString("    ;;\n")
+
+	// gh pr view
+	script.WriteString("  \"pr view\")\n")
+	if prViewJSON == "" {
+		script.WriteString("    exit 1\n")
+	} else {
+		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prViewJSON))
+	}
+	script.WriteString("    ;;\n")
+
+	// gh pr create
+	script.WriteString("  \"pr create\")\n")
+	if prCreateURL == "" {
+		script.WriteString("    echo 'creation failed' >&2\n")
+		script.WriteString("    exit 1\n")
+	} else {
+		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prCreateURL))
+	}
+	script.WriteString("    ;;\n")
+
+	// gh pr checks
+	script.WriteString("  \"pr checks\")\n")
+	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", checksJSON))
+	script.WriteString("    ;;\n")
+
+	script.WriteString("  *)\n")
+	script.WriteString("    echo \"unexpected gh call: $*\" >&2\n")
+	script.WriteString("    exit 99\n")
+	script.WriteString("    ;;\n")
+	script.WriteString("esac\n")
+
+	ghPath := filepath.Join(binDir, "gh")
+	require.NoError(t, os.WriteFile(ghPath, []byte(script.String()), 0o755)) //nolint:gosec // test script needs execute permission
+
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+origPath)
+}
+
+// mockGHWithCIStateful creates a gh mock that returns different pr checks results on successive calls.
+// Uses a counter file to track call number.
+func mockGHWithCIStateful(t *testing.T, defaultBranch, prViewJSON, prCreateURL string, checksResponses []string) {
+	t.Helper()
+	binDir := t.TempDir()
+	counterFile := filepath.Join(binDir, "counter")
+	require.NoError(t, os.WriteFile(counterFile, []byte("0"), 0o600))
+
+	var script strings.Builder
+	script.WriteString("#!/bin/sh\n")
+	script.WriteString("case \"$1 $2\" in\n")
+
+	// gh repo view
+	script.WriteString("  \"repo view\")\n")
+	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", defaultBranch))
+	script.WriteString("    ;;\n")
+
+	// gh pr view
+	script.WriteString("  \"pr view\")\n")
+	if prViewJSON == "" {
+		script.WriteString("    exit 1\n")
+	} else {
+		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prViewJSON))
+	}
+	script.WriteString("    ;;\n")
+
+	// gh pr create
+	script.WriteString("  \"pr create\")\n")
+	if prCreateURL == "" {
+		script.WriteString("    echo 'creation failed' >&2\n")
+		script.WriteString("    exit 1\n")
+	} else {
+		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prCreateURL))
+	}
+	script.WriteString("    ;;\n")
+
+	// gh pr checks — stateful
+	script.WriteString("  \"pr checks\")\n")
+	script.WriteString(fmt.Sprintf("    COUNT=$(cat %s)\n", counterFile))
+	script.WriteString("    COUNT=$((COUNT + 1))\n")
+	script.WriteString(fmt.Sprintf("    printf '%%s' \"$COUNT\" > %s\n", counterFile))
+	script.WriteString("    case $COUNT in\n")
+	for i, resp := range checksResponses {
+		script.WriteString(fmt.Sprintf("      %d)\n", i+1))
+		script.WriteString(fmt.Sprintf("        printf '%%s' '%s'\n", resp))
+		script.WriteString("        ;;\n")
+	}
+	// After all responses exhausted, return the last one
+	script.WriteString("      *)\n")
+	if len(checksResponses) > 0 {
+		script.WriteString(fmt.Sprintf("        printf '%%s' '%s'\n", checksResponses[len(checksResponses)-1]))
+	}
+	script.WriteString("        ;;\n")
+	script.WriteString("    esac\n")
+	script.WriteString("    ;;\n")
+
+	script.WriteString("  *)\n")
+	script.WriteString("    echo \"unexpected gh call: $*\" >&2\n")
+	script.WriteString("    exit 99\n")
+	script.WriteString("    ;;\n")
+	script.WriteString("esac\n")
+
+	ghPath := filepath.Join(binDir, "gh")
+	require.NoError(t, os.WriteFile(ghPath, []byte(script.String()), 0o755)) //nolint:gosec // test script needs execute permission
+
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+origPath)
+}
+
+func TestRun_CI_AllGreen(t *testing.T) {
+	dir := initGitRepo(t)
+	initBareRemote(t, dir)
+
+	// Create feature branch with a commit
+	gitCmd(t, dir, "checkout", "-b", "feature-ci")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("new feature"), 0o600))
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add feature")
+
+	// Add workflow file with push trigger
+	addWorkflowFile(t, dir)
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add workflows")
+
+	chdir(t, dir)
+
+	mockGHWithCI(t, "main", "", "https://github.com/user/repo/pull/50",
+		`[{"name":"lint","state":"SUCCESS","conclusion":"success"},{"name":"test","state":"SUCCESS","conclusion":"success"}]`)
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:       &buf,
+		RemoteURL:    "https://github.com/user/repo.git",
+		IsGitHub:     true,
+		Executor:     &mockExecutor{output: "Add feature\n\nImplements the feature."},
+		RepoRoot:     dir,
+		PollInterval: time.Millisecond,
+	}
+
+	err := Run(context.Background(), cfg)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "Waiting for CI checks...")
+	assert.Contains(t, output, "CI passed — PR ready for review")
+}
+
+func TestRun_CI_PendingThenGreen(t *testing.T) {
+	dir := initGitRepo(t)
+	initBareRemote(t, dir)
+
+	// Create feature branch with a commit
+	gitCmd(t, dir, "checkout", "-b", "feature-ci-pending")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("new feature"), 0o600))
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add feature")
+
+	// Add workflow file with push trigger
+	addWorkflowFile(t, dir)
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add workflows")
+
+	chdir(t, dir)
+
+	mockGHWithCIStateful(t, "main", "", "https://github.com/user/repo/pull/51",
+		[]string{
+			// First poll: pending
+			`[{"name":"lint","state":"SUCCESS","conclusion":"success"},{"name":"test","state":"PENDING","conclusion":""}]`,
+			// Second poll: all green
+			`[{"name":"lint","state":"SUCCESS","conclusion":"success"},{"name":"test","state":"SUCCESS","conclusion":"success"}]`,
+		})
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:       &buf,
+		RemoteURL:    "https://github.com/user/repo.git",
+		IsGitHub:     true,
+		Executor:     &mockExecutor{output: "Add feature\n\nImplements the feature."},
+		RepoRoot:     dir,
+		PollInterval: time.Millisecond,
+	}
+
+	err := Run(context.Background(), cfg)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "Waiting for CI checks...")
+	// First poll prints status with pending check
+	assert.Contains(t, output, "lint: passed, test: pending")
+	// Second poll shows changed status and final success
+	assert.Contains(t, output, "lint: passed, test: passed")
+	assert.Contains(t, output, "CI passed — PR ready for review")
+}
+
+func TestRun_NoWorkflows(t *testing.T) {
+	dir := initGitRepo(t)
+	initBareRemote(t, dir)
+
+	// Create feature branch — no .github/workflows/
+	gitCmd(t, dir, "checkout", "-b", "feature-no-ci")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("new feature"), 0o600))
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add feature")
+
+	chdir(t, dir)
+
+	mockGHMulti(t, "main", "", "https://github.com/user/repo/pull/52")
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:    &buf,
+		RemoteURL: "https://github.com/user/repo.git",
+		IsGitHub:  true,
+		Executor:  &mockExecutor{output: "Add feature\n\nBody."},
+		RepoRoot:  dir,
+	}
+
+	err := Run(context.Background(), cfg)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "No CI workflows found, done")
+	assert.NotContains(t, output, "Waiting for CI checks...")
+}
+
+func TestRun_CI_Failed(t *testing.T) {
+	dir := initGitRepo(t)
+	initBareRemote(t, dir)
+
+	// Create feature branch
+	gitCmd(t, dir, "checkout", "-b", "feature-ci-fail")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("new feature"), 0o600))
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add feature")
+
+	// Add workflow file
+	addWorkflowFile(t, dir)
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add workflows")
+
+	chdir(t, dir)
+
+	mockGHWithCI(t, "main", "", "https://github.com/user/repo/pull/53",
+		`[{"name":"lint","state":"SUCCESS","conclusion":"success"},{"name":"test","state":"FAILURE","conclusion":"failure"}]`)
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:       &buf,
+		RemoteURL:    "https://github.com/user/repo.git",
+		IsGitHub:     true,
+		Executor:     &mockExecutor{output: "Add feature\n\nBody."},
+		RepoRoot:     dir,
+		PollInterval: time.Millisecond,
+	}
+
+	err := Run(context.Background(), cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CI failed")
+}
+
+func TestRun_CI_ContextCancelled(t *testing.T) {
+	dir := t.TempDir()
+	addWorkflowFile(t, dir)
+
+	// Mock gh that always returns pending
+	mockGHScript(t, `printf '%s' '[{"name":"lint","state":"PENDING","conclusion":""},{"name":"test","state":"PENDING","conclusion":""}]'`)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:       &buf,
+		RepoRoot:     dir,
+		PollInterval: time.Millisecond,
+	}
+
+	// Cancel context shortly after starting
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	// Test monitorCI directly to avoid push timing issues
+	err := monitorCI(ctx, cfg, true, "main")
+	// Context cancellation should not return an error
+	assert.NoError(t, err)
 }

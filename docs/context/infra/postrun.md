@@ -8,7 +8,8 @@ Post-run operations execute after all tasks are completed. These steps automate 
 
 - `internal/postrun/postrun.go` — Post-run orchestration
 - `internal/postrun/git.go` — Git remote detection, push, and branch tracking
-- `internal/postrun/github.go` — GitHub API operations (PR creation)
+- `internal/postrun/github.go` — GitHub API operations (PR creation, CI status checking)
+- `internal/postrun/workflow.go` — CI workflow detection
 - `internal/postrun/prompts/` — LLM prompt templates for PR generation
 - `internal/postrun/parse.go` — LLM output parsing for PR title/body
 
@@ -18,12 +19,14 @@ After all tasks complete, the workflow runner calls `postrun.Run()` with:
 
 ```go
 postrun.Run(ctx, postrun.Config{
-    Output:    output,
-    Executor:  executor,       // LLM executor for PR generation
-    RemoteURL: remoteURL,      // Pre-detected remote URL (empty = no remote)
-    IsGitHub:  isGitHub,       // Pre-detected GitHub flag
-    PRDPath:   prdPath,        // PRD.md path for PR body context
-    TasksDir:  tasksDir,       // Tasks directory
+    Output:       output,
+    Executor:     executor,       // LLM executor for PR generation
+    RemoteURL:    remoteURL,      // Pre-detected remote URL (empty = no remote)
+    IsGitHub:     isGitHub,       // Pre-detected GitHub flag
+    PRDPath:      prdPath,        // PRD.md path for PR body context
+    TasksDir:     tasksDir,       // Tasks directory
+    RepoRoot:     repoRoot,       // Repository root for workflow detection (defaults to ".")
+    PollInterval: pollInterval,   // CI status poll interval (defaults to 15s)
 })
 ```
 
@@ -42,6 +45,14 @@ postrun.Run(ctx, postrun.Config{
    - Generate PR title and body via LLM (using PRD context)
    - Create PR via `gh pr create`
    - Display PR URL and number
+5. **CI status monitoring** (all remotes with GitHub or after PR creation):
+   - Detect if CI workflows exist via `HasRelevantWorkflows()` (scans `.github/workflows/*.yml`)
+   - If no relevant workflows: Display "No CI workflows found, done" and exit
+   - If workflows exist: Poll CI status via `CheckStatus()` (uses `gh pr checks` or `gh run list`)
+   - Display status updates when check status changes (silent between polls)
+   - Format status as individual checks (≤5) or grouped summary (>5)
+   - On all checks passed: Display "CI passed — PR ready for review" (or "CI passed" for default branch)
+   - On any check failed: Return error with failed check names
 
 ## Git Remote Detection
 
@@ -122,6 +133,32 @@ Creates a new pull request using `gh pr create --title "..." --body "..."`.
 
 Returns the PR URL. Returns error if creation fails.
 
+### CheckStatus
+
+Retrieves CI check status using `gh pr checks` or `gh run list`.
+
+- **For PR branches**: Uses `gh pr checks --json name,state,conclusion` to get individual check results
+- **For default branch**: Uses `gh run list --branch <branch> --json name,status,conclusion --limit 1` to get the latest workflow run
+- Returns a slice of `CheckResult` structs with normalized statuses: "passed", "failed", "running", "pending"
+- Normalizes GitHub's various status values (SUCCESS, PENDING, FAILURE, etc.) to our standard statuses
+
+## CI Workflow Detection
+
+**File**: `internal/postrun/workflow.go`
+
+### HasRelevantWorkflows
+
+Detects if the repository has GitHub Actions workflows triggered by `push` or `pull_request`:
+
+- Scans `.github/workflows/*.yml` and `*.yaml` files
+- Uses text-based scanning (not full YAML parsing) for conservative matching
+- Matches trigger lines like `on: push`, `on: [push, pull_request]`, `on:\n  push:`, etc.
+- Returns `true` if at least one workflow has a relevant trigger
+- Returns `false` if `.github/workflows/` doesn't exist or is empty
+- Skips unreadable files gracefully (returns false, not error)
+
+Used to determine if CI monitoring should proceed after push/PR creation.
+
 ## PR Generation
 
 **File**: `internal/postrun/prompts/pr.md` and `internal/postrun/prompts/prompts.go`
@@ -170,16 +207,16 @@ Post-run behavior is automatic and requires no user configuration:
 - If non-GitHub remote: Push succeeds, GitHub features skipped
 - If GitHub remote: Push succeeds, gh CLI pre-validated during startup
 
-## Future Extensions (TASK3+)
+## Implementation Status
 
 Current implementation includes:
 
 - ✅ Git push to remote
 - ✅ GitHub PR creation with LLM-generated title and body (TASK2)
+- ✅ CI status monitoring and polling (TASK3)
 
 Future tasks will add:
 
-- CI status monitoring and polling (TASK3)
 - CI failure log reading and LLM-driven fix attempts (TASK4)
 - Auto-merge handling (post-TASK4)
 

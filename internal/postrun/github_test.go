@@ -89,3 +89,51 @@ func TestCreatePR_Failure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "permission denied")
 }
+
+func TestCheckStatus_AllGreen(t *testing.T) {
+	mockGHScript(t, `
+printf '%s' '[{"name":"lint","state":"SUCCESS","conclusion":"success"},{"name":"test","state":"SUCCESS","conclusion":"success"}]'
+`)
+
+	checks, err := CheckStatus(context.Background(), true, "main")
+	require.NoError(t, err)
+	require.Len(t, checks, 2)
+	assert.Equal(t, "lint", checks[0].Name)
+	assert.Equal(t, "passed", checks[0].Status)
+	assert.Equal(t, "test", checks[1].Name)
+	assert.Equal(t, "passed", checks[1].Status)
+}
+
+func TestCheckStatus_Mixed(t *testing.T) {
+	mockGHScript(t, `
+printf '%s' '[{"name":"lint","state":"SUCCESS","conclusion":"success"},{"name":"test","state":"FAILURE","conclusion":"failure"},{"name":"build","state":"PENDING","conclusion":""}]'
+`)
+
+	checks, err := CheckStatus(context.Background(), true, "main")
+	require.NoError(t, err)
+	require.Len(t, checks, 3)
+	assert.Equal(t, "passed", checks[0].Status)
+	assert.Equal(t, "failed", checks[1].Status)
+	assert.Equal(t, "pending", checks[2].Status)
+}
+
+func TestCheckStatus_NoPR(t *testing.T) {
+	// When no PR, CheckStatus uses gh run list with --json
+	mockGHScript(t, `
+printf '%s' '[{"name":"CI","status":"completed","conclusion":"success"}]'
+`)
+
+	checks, err := CheckStatus(context.Background(), false, "main")
+	require.NoError(t, err)
+	require.Len(t, checks, 1)
+	assert.Equal(t, "CI", checks[0].Name)
+	assert.Equal(t, "passed", checks[0].Status)
+}
+
+func TestCheckStatus_Empty(t *testing.T) {
+	mockGHScript(t, `printf '%s' '[]'`)
+
+	checks, err := CheckStatus(context.Background(), true, "main")
+	require.NoError(t, err)
+	assert.Empty(t, checks)
+}

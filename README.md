@@ -94,7 +94,7 @@ When all tasks are complete, snap automatically pushes commits to your configure
 
 - **No remote configured**: Pushes are skipped, workflow completes cleanly
 - **Non-GitHub remote**: Commits are pushed; PR and CI features are skipped
-- **GitHub remote**: Commits are pushed, then snap creates a PR with an LLM-generated title and description
+- **GitHub remote**: Commits are pushed, then snap creates a PR with an LLM-generated title and description, then monitors CI status until completion
 
 If push fails (e.g., rejected by remote), the error is displayed and the workflow stops.
 
@@ -108,6 +108,19 @@ On GitHub remotes, after pushing:
 4. snap creates the PR via `gh` CLI and displays the URL
 
 Requires `gh` CLI in PATH — pre-validated during startup if you're on a GitHub remote.
+
+### CI Status Monitoring
+
+After pushing and creating a PR (or pushing to the default branch), snap monitors GitHub Actions workflows:
+
+- If no CI workflows are configured (no `.github/workflows/*.yml`), snap completes cleanly
+- If CI workflows exist, snap polls their status with live terminal updates showing check progress
+- Individual check status is displayed when ≤5 checks (e.g., `lint: passed, test: running`)
+- When >5 checks exist, status is summarized (e.g., `3 passed, 1 running, 2 pending`)
+- When all checks pass, snap prints `CI passed — PR ready for review` and completes
+- If any check fails, snap reports the failure and stops
+
+Status updates only print when check status changes — polls with no changes are silent.
 
 ## Steering while it runs
 
