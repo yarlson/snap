@@ -894,7 +894,7 @@ func TestRawReader_LongLineIsTruncated(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		return q.Len() == 1
-	}, time.Second, 10*time.Millisecond)
+	}, 5*time.Second, 10*time.Millisecond)
 
 	prompt, ok := q.Dequeue()
 	require.True(t, ok)
@@ -911,6 +911,9 @@ func TestRawReaderModal_LongLineIsTruncated(t *testing.T) {
 	go func() { rr.run() }()
 
 	// Write a line exceeding maxLineLen, then Enter.
+	// The modal path processes each byte individually and triggers redrawLine()
+	// once the line exceeds terminal width, so this needs a generous timeout
+	// (especially under the race detector on slow CI runners).
 	longInput := make([]byte, maxLineLen+100, maxLineLen+101)
 	for i := range longInput {
 		longInput[i] = 'b'
@@ -921,7 +924,7 @@ func TestRawReaderModal_LongLineIsTruncated(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		return q.Len() == 1
-	}, time.Second, 10*time.Millisecond)
+	}, 5*time.Second, 10*time.Millisecond)
 
 	prompt, ok := q.Dequeue()
 	require.True(t, ok)
