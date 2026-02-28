@@ -61,7 +61,7 @@ func mockGHMulti(t *testing.T, defaultBranch, prViewJSON, prCreateURL string) {
 
 	// gh repo view
 	script.WriteString("  \"repo view\")\n")
-	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", defaultBranch))
+	fmt.Fprintf(&script, "    printf '%%s' '%s'\n", defaultBranch)
 	script.WriteString("    ;;\n")
 
 	// gh pr view
@@ -69,7 +69,7 @@ func mockGHMulti(t *testing.T, defaultBranch, prViewJSON, prCreateURL string) {
 	if prViewJSON == "" {
 		script.WriteString("    exit 1\n")
 	} else {
-		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prViewJSON))
+		fmt.Fprintf(&script, "    printf '%%s' '%s'\n", prViewJSON)
 	}
 	script.WriteString("    ;;\n")
 
@@ -79,7 +79,7 @@ func mockGHMulti(t *testing.T, defaultBranch, prViewJSON, prCreateURL string) {
 		script.WriteString("    echo 'creation failed' >&2\n")
 		script.WriteString("    exit 1\n")
 	} else {
-		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prCreateURL))
+		fmt.Fprintf(&script, "    printf '%%s' '%s'\n", prCreateURL)
 	}
 	script.WriteString("    ;;\n")
 
@@ -521,7 +521,7 @@ func mockGHWithCI(t *testing.T, defaultBranch, prViewJSON, prCreateURL, checksJS
 
 	// gh repo view
 	script.WriteString("  \"repo view\")\n")
-	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", defaultBranch))
+	fmt.Fprintf(&script, "    printf '%%s' '%s'\n", defaultBranch)
 	script.WriteString("    ;;\n")
 
 	// gh pr view
@@ -529,7 +529,7 @@ func mockGHWithCI(t *testing.T, defaultBranch, prViewJSON, prCreateURL, checksJS
 	if prViewJSON == "" {
 		script.WriteString("    exit 1\n")
 	} else {
-		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prViewJSON))
+		fmt.Fprintf(&script, "    printf '%%s' '%s'\n", prViewJSON)
 	}
 	script.WriteString("    ;;\n")
 
@@ -539,13 +539,13 @@ func mockGHWithCI(t *testing.T, defaultBranch, prViewJSON, prCreateURL, checksJS
 		script.WriteString("    echo 'creation failed' >&2\n")
 		script.WriteString("    exit 1\n")
 	} else {
-		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prCreateURL))
+		fmt.Fprintf(&script, "    printf '%%s' '%s'\n", prCreateURL)
 	}
 	script.WriteString("    ;;\n")
 
 	// gh pr checks
 	script.WriteString("  \"pr checks\")\n")
-	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", checksJSON))
+	fmt.Fprintf(&script, "    printf '%%s' '%s'\n", checksJSON)
 	script.WriteString("    ;;\n")
 
 	script.WriteString("  *)\n")
@@ -575,7 +575,7 @@ func mockGHWithCIStateful(t *testing.T, defaultBranch, prViewJSON, prCreateURL s
 
 	// gh repo view
 	script.WriteString("  \"repo view\")\n")
-	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", defaultBranch))
+	fmt.Fprintf(&script, "    printf '%%s' '%s'\n", defaultBranch)
 	script.WriteString("    ;;\n")
 
 	// gh pr view
@@ -583,7 +583,7 @@ func mockGHWithCIStateful(t *testing.T, defaultBranch, prViewJSON, prCreateURL s
 	if prViewJSON == "" {
 		script.WriteString("    exit 1\n")
 	} else {
-		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prViewJSON))
+		fmt.Fprintf(&script, "    printf '%%s' '%s'\n", prViewJSON)
 	}
 	script.WriteString("    ;;\n")
 
@@ -593,25 +593,25 @@ func mockGHWithCIStateful(t *testing.T, defaultBranch, prViewJSON, prCreateURL s
 		script.WriteString("    echo 'creation failed' >&2\n")
 		script.WriteString("    exit 1\n")
 	} else {
-		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prCreateURL))
+		fmt.Fprintf(&script, "    printf '%%s' '%s'\n", prCreateURL)
 	}
 	script.WriteString("    ;;\n")
 
 	// gh pr checks — stateful
 	script.WriteString("  \"pr checks\")\n")
-	script.WriteString(fmt.Sprintf("    COUNT=$(cat %s)\n", counterFile))
+	fmt.Fprintf(&script, "    COUNT=$(cat %s)\n", counterFile)
 	script.WriteString("    COUNT=$((COUNT + 1))\n")
-	script.WriteString(fmt.Sprintf("    printf '%%s' \"$COUNT\" > %s\n", counterFile))
+	fmt.Fprintf(&script, "    printf '%%s' \"$COUNT\" > %s\n", counterFile)
 	script.WriteString("    case $COUNT in\n")
 	for i, resp := range checksResponses {
-		script.WriteString(fmt.Sprintf("      %d)\n", i+1))
-		script.WriteString(fmt.Sprintf("        printf '%%s' '%s'\n", resp))
+		fmt.Fprintf(&script, "      %d)\n", i+1)
+		fmt.Fprintf(&script, "        printf '%%s' '%s'\n", resp)
 		script.WriteString("        ;;\n")
 	}
 	// After all responses exhausted, return the last one
 	script.WriteString("      *)\n")
 	if len(checksResponses) > 0 {
-		script.WriteString(fmt.Sprintf("        printf '%%s' '%s'\n", checksResponses[len(checksResponses)-1]))
+		fmt.Fprintf(&script, "        printf '%%s' '%s'\n", checksResponses[len(checksResponses)-1])
 	}
 	script.WriteString("        ;;\n")
 	script.WriteString("    esac\n")
@@ -764,7 +764,7 @@ func mockGHWithCIFix(t *testing.T, defaultBranch, prViewJSON, prCreateURL string
 
 	// gh repo view
 	script.WriteString("  \"repo view\")\n")
-	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", defaultBranch))
+	fmt.Fprintf(&script, "    printf '%%s' '%s'\n", defaultBranch)
 	script.WriteString("    ;;\n")
 
 	// gh pr view
@@ -772,7 +772,7 @@ func mockGHWithCIFix(t *testing.T, defaultBranch, prViewJSON, prCreateURL string
 	if prViewJSON == "" {
 		script.WriteString("    exit 1\n")
 	} else {
-		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prViewJSON))
+		fmt.Fprintf(&script, "    printf '%%s' '%s'\n", prViewJSON)
 	}
 	script.WriteString("    ;;\n")
 
@@ -782,24 +782,24 @@ func mockGHWithCIFix(t *testing.T, defaultBranch, prViewJSON, prCreateURL string
 		script.WriteString("    echo 'creation failed' >&2\n")
 		script.WriteString("    exit 1\n")
 	} else {
-		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prCreateURL))
+		fmt.Fprintf(&script, "    printf '%%s' '%s'\n", prCreateURL)
 	}
 	script.WriteString("    ;;\n")
 
 	// gh pr checks — stateful
 	script.WriteString("  \"pr checks\")\n")
-	script.WriteString(fmt.Sprintf("    COUNT=$(cat %s)\n", counterFile))
+	fmt.Fprintf(&script, "    COUNT=$(cat %s)\n", counterFile)
 	script.WriteString("    COUNT=$((COUNT + 1))\n")
-	script.WriteString(fmt.Sprintf("    printf '%%s' \"$COUNT\" > %s\n", counterFile))
+	fmt.Fprintf(&script, "    printf '%%s' \"$COUNT\" > %s\n", counterFile)
 	script.WriteString("    case $COUNT in\n")
 	for i, resp := range checksResponses {
-		script.WriteString(fmt.Sprintf("      %d)\n", i+1))
-		script.WriteString(fmt.Sprintf("        printf '%%s' '%s'\n", resp))
+		fmt.Fprintf(&script, "      %d)\n", i+1)
+		fmt.Fprintf(&script, "        printf '%%s' '%s'\n", resp)
 		script.WriteString("        ;;\n")
 	}
 	script.WriteString("      *)\n")
 	if len(checksResponses) > 0 {
-		script.WriteString(fmt.Sprintf("        printf '%%s' '%s'\n", checksResponses[len(checksResponses)-1]))
+		fmt.Fprintf(&script, "        printf '%%s' '%s'\n", checksResponses[len(checksResponses)-1])
 	}
 	script.WriteString("        ;;\n")
 	script.WriteString("    esac\n")
@@ -807,12 +807,12 @@ func mockGHWithCIFix(t *testing.T, defaultBranch, prViewJSON, prCreateURL string
 
 	// gh run list (for FailedRunID)
 	script.WriteString("  \"run list\")\n")
-	script.WriteString(fmt.Sprintf("    printf '%%s' '[{\"databaseId\":%s}]'\n", failedRunID))
+	fmt.Fprintf(&script, "    printf '%%s' '[{\"databaseId\":%s}]'\n", failedRunID)
 	script.WriteString("    ;;\n")
 
 	// gh run view (for FailureLogs)
 	script.WriteString("  \"run view\")\n")
-	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", failedLogs))
+	fmt.Fprintf(&script, "    printf '%%s' '%s'\n", failedLogs)
 	script.WriteString("    ;;\n")
 
 	script.WriteString("  *)\n")
