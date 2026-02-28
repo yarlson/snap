@@ -53,7 +53,7 @@ Build, deployment, CI/CD infrastructure, and post-run operations.
 
 - [`infra/ci.md`](infra/ci.md) — GitHub Actions CI workflow, lint and race-condition testing, YAML validation tests
 - [`infra/release.md`](infra/release.md) — Release automation workflow, GoReleaser configuration, version injection, multi-platform builds, release testing
-- [`infra/postrun.md`](infra/postrun.md) — Post-completion workflow, git remote detection, auto-push to origin, GitHub remote detection, gh CLI validation
+- [`infra/postrun.md`](infra/postrun.md) — Post-completion workflow, git remote detection, auto-push to origin, GitHub PR creation with LLM-generated title and body, gh CLI integration
 
 ---
 
