@@ -26,31 +26,31 @@ Session resolution logic:
 
 ## Conflict Guard: Planning Artifacts Detection
 
-After session resolution, `snap plan` checks for existing planning artifacts (TASK*.md, PRD.md, TECHNOLOGY.md, DESIGN.md) in the session's tasks directory. If artifacts are found, the behavior depends on input mode:
+After session resolution, `snap plan` checks for existing planning artifacts (TASK\*.md, PRD.md, TECHNOLOGY.md, DESIGN.md) in the session's tasks directory. If artifacts are found, the behavior depends on input mode:
 
 **TTY (Interactive Terminal)**:
-- Displays conflict prompt:
-  ```
-  Session '<name>' already has planning artifacts.
 
-    [1] Clean up and re-plan this session
-    [2] Create a new session
+- Uses `tap.Select` from `github.com/yarlson/tap` to present a styled selection prompt:
+  - Message: `Session "<name>" already has planning artifacts.`
+  - Option 1: "Clean up and re-plan this session" (value: `"replan"`)
+  - Option 2: "Create a new session" (value: `"new"`)
+- First option is pre-selected; user navigates with arrow keys and confirms with Enter
+- Ctrl+C or Escape cancels (returns `context.Canceled`)
+- On "replan": Cleans all artifacts via `session.CleanSession()` and proceeds with re-planning (session directory and structure remain intact; only task files and state are removed)
+- On "new": Transitions to `tap.Text` prompt for session name entry
 
-  Choice (1/2):
-  ```
-- User options:
-  - Press `1` to clean all artifacts and proceed with re-planning the current session (session directory and structure remain intact; only task files and state are removed)
-  - Press `2` to create a new session with a different name (prompts for "Session name:", validates input, checks for existing sessions, creates new session on valid input)
-- Session creation flow (choice 2):
-  - Prompts user with "Session name:" prompt
-  - Validates name using `session.ValidateName()` (name format rules)
-  - Checks that session doesn't already exist
-  - If invalid or exists: displays error and re-prompts
+- Session creation flow (choice "new"):
+  - Uses `tap.Text` with inline validation callback
+  - Message: "Session name", Placeholder: "Enter a name for the new session"
+  - Validate function checks `session.ValidateName()` and `session.Exists()`
+  - If invalid or exists: tap displays validation error inline and keeps user in prompt (field content is preserved)
   - If valid and new: creates session via `session.Create()` and proceeds with planning in new session
-- User can press Ctrl+C to abort at any point
+  - Ctrl+C or Escape cancels (returns `context.Canceled`)
 
 **Non-TTY (Piped/Redirected Input)**:
+
 - Returns error with instructions:
+
   ```
   session '<name>' already has planning artifacts
 
@@ -60,6 +60,7 @@ After session resolution, `snap plan` checks for existing planning artifacts (TA
   Or plan in a new session:
     snap new <name> && snap plan <name>
   ```
+
 - Prevents accidental overwriting of planning artifacts in automated/CI scenarios
 
 The conflict guard ensures users don't accidentally overwrite planning artifacts without explicit confirmation.
@@ -224,7 +225,9 @@ After successful completion:
 - **ui package**: `Interrupted()` formatting function
 - **model package**: Task and document models
 - **tap package** (`github.com/yarlson/tap`):
-  - `Text(ctx, TextOptions)` — interactive text input with validation, placeholder, and abort support (Ctrl+C, Escape)
+  - `Select(ctx, SelectOptions[T])` — styled selection prompt with arrow-key navigation; used in conflict guard for replan/new-session choice
+  - `Text(ctx, TextOptions)` — interactive text input with validation, placeholder, and abort support (Ctrl+C, Escape); used in conflict guard for new session name entry and Phase 1 requirements gathering
+  - `SelectOptions[T]` — configuration with Message and Options ([]SelectOption[T] with Value and Label)
   - `TextOptions` — configuration with Message, Placeholder, and Validate callback
 - **internal/input package**:
   - `IsTerminal(*os.File)` — checks if file descriptor is a TTY (used by both plan and run for input mode detection)
@@ -241,6 +244,11 @@ After successful completion:
   - Session resolution (explicit, auto-detect, errors)
   - File generation and placement
   - Signal interruption behavior
+- Conflict guard tests: `cmd/plan_test.go`
+  - Uses tap mock pattern: `tap.NewMockReadable()`, `tap.NewMockWritable()`, `tap.SetTermIO(in, out)`
+  - Runs `checkPlanConflict` in goroutine, emits keypresses asynchronously with `time.Sleep` for sync
+  - Tests: empty session (no prompt), non-TTY error, choice 1 (Enter selects pre-selected replan), Ctrl+C cancellation, choice 2 with valid name (down arrow + Enter to select, then type name), choice 2 with invalid-then-valid name (backspace to clear after validation error), choice 2 with existing-then-new name, Ctrl+C during name input
+  - Note: tap keeps field content after validation error, so tests must emit backspace characters to clear before typing corrected input
 - Unit tests: `internal/plan/planner_test.go`, `internal/plan/prompt_test.go`
   - Phase 1 interactive chat flow via tap.Text (TTY mode) and scanner (piped mode)
   - Phase 2 document generation
@@ -268,8 +276,8 @@ Located in `cmd/plan.go`:
 - `planCmd` — Cobra command definition
 - `planRun()` — Entry point orchestrating full pipeline
 - `resolvePlanSession()` — Session name resolution logic
-- `checkPlanConflict()` — Conflict guard: detects existing artifacts and handles TTY/non-TTY cases; dispatches to choice 1 (clean session) or choice 2 (create new session)
-- `promptNewSession()` — Creates new session with user-provided name; prompts for name, validates, checks existence, creates session, returns new session name; supports both TTY raw-mode and piped input
+- `checkPlanConflict(ctx, sessionName, isTTY)` — Conflict guard: detects existing artifacts; uses `tap.Select` for TTY choice (replan or new session), returns error for non-TTY
+- `promptNewSession(ctx)` — Creates new session with user-provided name via `tap.Text`; inline validation checks name format and uniqueness; returns new session name
 - `formatMultiplePlanSessionsError()` — Error message formatting
 - `printFileListing(w io.Writer, tasksDir string)` — Directory listing after completion with formatted output via io.Writer
 - Signal handler setup in `planRun()`

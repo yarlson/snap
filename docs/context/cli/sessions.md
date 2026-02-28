@@ -319,7 +319,7 @@ snap run my-project
 - Tests for `HasPlanHistory()` — Plan marker detection
 - Tests for `MarkPlanStarted()` — Marker file creation
 - Tests for `Exists()` — Session existence checking
-- Tests for `HasArtifacts()` — Planning artifact detection (TASK*.md, PRD.md, TECHNOLOGY.md, DESIGN.md)
+- Tests for `HasArtifacts()` — Planning artifact detection (TASK\*.md, PRD.md, TECHNOLOGY.md, DESIGN.md)
 - Tests for `CleanSession()` — Complete session cleanup (tasks directory and state files)
 
 **Integration tests**:

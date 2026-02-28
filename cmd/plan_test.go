@@ -1,20 +1,33 @@
 package cmd
 
 import (
-	"bytes"
-	"errors"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yarlson/tap"
 
-	"github.com/yarlson/snap/internal/input"
 	"github.com/yarlson/snap/internal/session"
 )
+
+// emitString types each rune as a keypress via the mock readable.
+func emitString(in *tap.MockReadable, s string) {
+	for _, ch := range s {
+		str := string(ch)
+		in.EmitKeypress(str, tap.Key{Name: str})
+	}
+}
+
+// emitLine types a string followed by Enter.
+func emitLine(in *tap.MockReadable, s string) {
+	emitString(in, s)
+	in.EmitKeypress("", tap.Key{Name: "return"})
+}
 
 // --- Integration tests: resolvePlanSession ---
 
@@ -65,11 +78,10 @@ func TestCheckPlanConflict_EmptySession_NoPrompt(t *testing.T) {
 	chdir(t, projectDir)
 	require.NoError(t, session.Create(".", "auth"))
 
-	var stdout bytes.Buffer
-	name, err := checkPlanConflict("auth", false, strings.NewReader(""), &stdout)
+	ctx := context.Background()
+	name, err := checkPlanConflict(ctx, "auth", false)
 	require.NoError(t, err)
 	assert.Equal(t, "auth", name)
-	assert.Empty(t, stdout.String())
 }
 
 func TestCheckPlanConflict_NonTTY_ReturnsError(t *testing.T) {
@@ -80,8 +92,8 @@ func TestCheckPlanConflict_NonTTY_ReturnsError(t *testing.T) {
 		filepath.Join(session.TasksDir(".", "auth"), "TASK1.md"),
 		[]byte("# Task 1\n"), 0o600))
 
-	var stdout bytes.Buffer
-	_, err := checkPlanConflict("auth", false, strings.NewReader(""), &stdout)
+	ctx := context.Background()
+	_, err := checkPlanConflict(ctx, "auth", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already has planning artifacts")
 	assert.Contains(t, err.Error(), "snap delete auth")
@@ -96,16 +108,42 @@ func TestCheckPlanConflict_TTY_Choice1_CleansUp(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(td, "TASK1.md"), []byte("# Task 1\n"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(td, "PRD.md"), []byte("# PRD\n"), 0o600))
 
-	var stdout bytes.Buffer
-	name, err := checkPlanConflict("auth", true, strings.NewReader("1"), &stdout)
-	require.NoError(t, err)
-	assert.Equal(t, "auth", name)
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	ctx := context.Background()
+	resultCh := make(chan struct {
+		name string
+		err  error
+	}, 1)
+
+	go func() {
+		name, err := checkPlanConflict(ctx, "auth", true)
+		resultCh <- struct {
+			name string
+			err  error
+		}{name, err}
+	}()
+
+	// First option (replan) is pre-selected; just press Enter.
+	time.Sleep(200 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "return"})
+
+	select {
+	case r := <-resultCh:
+		require.NoError(t, r.err)
+		assert.Equal(t, "auth", r.name)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out")
+	}
 
 	// Session should be cleaned.
 	assert.False(t, session.HasArtifacts(".", "auth"))
 }
 
-func TestCheckPlanConflict_TTY_CtrlC_ReturnsInterrupt(t *testing.T) {
+func TestCheckPlanConflict_TTY_CtrlC_ReturnsCanceled(t *testing.T) {
 	projectDir := t.TempDir()
 	chdir(t, projectDir)
 	require.NoError(t, session.Create(".", "auth"))
@@ -113,44 +151,30 @@ func TestCheckPlanConflict_TTY_CtrlC_ReturnsInterrupt(t *testing.T) {
 		filepath.Join(session.TasksDir(".", "auth"), "TASK1.md"),
 		[]byte("# Task 1\n"), 0o600))
 
-	// Ctrl+C is byte 3.
-	var stdout bytes.Buffer
-	_, err := checkPlanConflict("auth", true, strings.NewReader(string(byte(3))), &stdout)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, input.ErrInterrupt))
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	ctx := context.Background()
+	resultCh := make(chan error, 1)
+
+	go func() {
+		_, err := checkPlanConflict(ctx, "auth", true)
+		resultCh <- err
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	in.EmitKeypress("\x03", tap.Key{Name: "c", Ctrl: true})
+
+	select {
+	case err := <-resultCh:
+		require.Error(t, err)
+		assert.ErrorIs(t, err, context.Canceled)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out")
+	}
 }
-
-func TestCheckPlanConflict_TTY_IgnoresInvalidInput(t *testing.T) {
-	projectDir := t.TempDir()
-	chdir(t, projectDir)
-	require.NoError(t, session.Create(".", "auth"))
-	require.NoError(t, os.WriteFile(
-		filepath.Join(session.TasksDir(".", "auth"), "TASK1.md"),
-		[]byte("# Task 1\n"), 0o600))
-
-	// Feed "x" then "1" — "x" should be ignored.
-	var stdout bytes.Buffer
-	name, err := checkPlanConflict("auth", true, strings.NewReader("x1"), &stdout)
-	require.NoError(t, err)
-	assert.Equal(t, "auth", name)
-}
-
-func TestCheckPlanConflict_TTY_InvalidChoice_IsIgnored(t *testing.T) {
-	projectDir := t.TempDir()
-	chdir(t, projectDir)
-	require.NoError(t, session.Create(".", "auth"))
-	require.NoError(t, os.WriteFile(
-		filepath.Join(session.TasksDir(".", "auth"), "TASK1.md"),
-		[]byte("# Task 1\n"), 0o600))
-
-	// Feed "3" (invalid) then "1" — "3" should be ignored.
-	var stdout bytes.Buffer
-	name, err := checkPlanConflict("auth", true, strings.NewReader("31"), &stdout)
-	require.NoError(t, err)
-	assert.Equal(t, "auth", name)
-}
-
-// --- Integration tests: checkPlanConflict choice 2 ---
 
 func TestCheckPlanConflict_TTY_Choice2_ValidName(t *testing.T) {
 	projectDir := t.TempDir()
@@ -160,22 +184,45 @@ func TestCheckPlanConflict_TTY_Choice2_ValidName(t *testing.T) {
 		filepath.Join(session.TasksDir(".", "auth"), "TASK1.md"),
 		[]byte("# Task 1\n"), 0o600))
 
-	// Feed "2" to select choice 2, then "my-feature\r" as the session name.
-	var stdout bytes.Buffer
-	name, err := checkPlanConflict("auth", true, strings.NewReader("2my-feature\r"), &stdout)
-	require.NoError(t, err)
-	assert.Equal(t, "my-feature", name)
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	ctx := context.Background()
+	resultCh := make(chan struct {
+		name string
+		err  error
+	}, 1)
+
+	go func() {
+		name, err := checkPlanConflict(ctx, "auth", true)
+		resultCh <- struct {
+			name string
+			err  error
+		}{name, err}
+	}()
+
+	// Select second option (new session): down arrow + Enter.
+	time.Sleep(200 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "down"})
+	time.Sleep(50 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "return"})
+
+	// Type session name + Enter.
+	time.Sleep(200 * time.Millisecond)
+	emitLine(in, "my-feature")
+
+	select {
+	case r := <-resultCh:
+		require.NoError(t, r.err)
+		assert.Equal(t, "my-feature", r.name)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out")
+	}
 
 	// New session should exist on disk.
 	assert.True(t, session.Exists(".", "my-feature"))
-
-	// Criterion 1: "Session name:" prompt must appear.
-	output := stdout.String()
-	assert.Contains(t, output, "Session name:")
-
-	// Criterion 7: No confirmation message after session creation.
-	assert.NotContains(t, output, "reated")
-	assert.NotContains(t, output, "onfirm")
 }
 
 func TestCheckPlanConflict_TTY_Choice2_InvalidThenValid(t *testing.T) {
@@ -186,23 +233,50 @@ func TestCheckPlanConflict_TTY_Choice2_InvalidThenValid(t *testing.T) {
 		filepath.Join(session.TasksDir(".", "auth"), "TASK1.md"),
 		[]byte("# Task 1\n"), 0o600))
 
-	// Feed "2", then "bad name!\r" (invalid), then "good-name\r" (valid).
-	var stdout bytes.Buffer
-	name, err := checkPlanConflict("auth", true, strings.NewReader("2bad name!\r"+"good-name\r"), &stdout)
-	require.NoError(t, err)
-	assert.Equal(t, "good-name", name)
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
 
-	// Validation error should have been printed.
-	output := stdout.String()
-	assert.Contains(t, output, "Invalid session name")
+	ctx := context.Background()
+	resultCh := make(chan struct {
+		name string
+		err  error
+	}, 1)
 
-	// Criterion 8: error on its own line, immediately above re-prompt (no blank line between).
-	errorIdx := strings.Index(output, "Invalid session name")
-	require.NotEqual(t, -1, errorIdx)
-	afterError := output[errorIdx:]
-	lines := strings.SplitN(afterError, "\r\n", 3)
-	require.GreaterOrEqual(t, len(lines), 2, "expected at least two lines after error")
-	assert.Contains(t, lines[1], "Session name:", "re-prompt should immediately follow error (no blank line)")
+	go func() {
+		name, err := checkPlanConflict(ctx, "auth", true)
+		resultCh <- struct {
+			name string
+			err  error
+		}{name, err}
+	}()
+
+	// Select "new session": down + Enter.
+	time.Sleep(200 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "down"})
+	time.Sleep(50 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "return"})
+
+	// Type invalid name + Enter (validation error shown by tap).
+	time.Sleep(200 * time.Millisecond)
+	emitLine(in, "bad name!")
+
+	// Clear the previous input (tap keeps field content after validation error),
+	// then type valid name + Enter.
+	time.Sleep(200 * time.Millisecond)
+	for range len("bad name!") {
+		in.EmitKeypress("", tap.Key{Name: "backspace"})
+	}
+	emitLine(in, "good-name")
+
+	select {
+	case r := <-resultCh:
+		require.NoError(t, r.err)
+		assert.Equal(t, "good-name", r.name)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out")
+	}
 
 	// New session should exist on disk.
 	assert.True(t, session.Exists(".", "good-name"))
@@ -216,23 +290,50 @@ func TestCheckPlanConflict_TTY_Choice2_ExistingThenNew(t *testing.T) {
 		filepath.Join(session.TasksDir(".", "auth"), "TASK1.md"),
 		[]byte("# Task 1\n"), 0o600))
 
-	// Feed "2", then "auth\r" (exists), then "auth-v2\r" (new).
-	var stdout bytes.Buffer
-	name, err := checkPlanConflict("auth", true, strings.NewReader("2auth\r"+"auth-v2\r"), &stdout)
-	require.NoError(t, err)
-	assert.Equal(t, "auth-v2", name)
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
 
-	// "Already exists" error should have been printed.
-	output := stdout.String()
-	assert.Contains(t, output, `Session "auth" already exists`)
+	ctx := context.Background()
+	resultCh := make(chan struct {
+		name string
+		err  error
+	}, 1)
 
-	// Criterion 8: error on its own line, immediately above re-prompt (no blank line between).
-	errorIdx := strings.Index(output, `Session "auth" already exists`)
-	require.NotEqual(t, -1, errorIdx)
-	afterError := output[errorIdx:]
-	lines := strings.SplitN(afterError, "\r\n", 3)
-	require.GreaterOrEqual(t, len(lines), 2, "expected at least two lines after error")
-	assert.Contains(t, lines[1], "Session name:", "re-prompt should immediately follow error (no blank line)")
+	go func() {
+		name, err := checkPlanConflict(ctx, "auth", true)
+		resultCh <- struct {
+			name string
+			err  error
+		}{name, err}
+	}()
+
+	// Select "new session": down + Enter.
+	time.Sleep(200 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "down"})
+	time.Sleep(50 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "return"})
+
+	// Type "auth" (already exists) + Enter.
+	time.Sleep(200 * time.Millisecond)
+	emitLine(in, "auth")
+
+	// Clear the previous input (tap keeps field content after validation error),
+	// then type "auth-v2" (new) + Enter.
+	time.Sleep(200 * time.Millisecond)
+	for range len("auth") {
+		in.EmitKeypress("", tap.Key{Name: "backspace"})
+	}
+	emitLine(in, "auth-v2")
+
+	select {
+	case r := <-resultCh:
+		require.NoError(t, r.err)
+		assert.Equal(t, "auth-v2", r.name)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out")
+	}
 
 	// New session should exist on disk.
 	assert.True(t, session.Exists(".", "auth-v2"))
@@ -246,26 +347,36 @@ func TestCheckPlanConflict_TTY_Choice2_CtrlC_DuringName(t *testing.T) {
 		filepath.Join(session.TasksDir(".", "auth"), "TASK1.md"),
 		[]byte("# Task 1\n"), 0o600))
 
-	// Feed "2" to select choice 2, then Ctrl+C (byte 3) during name input.
-	var stdout bytes.Buffer
-	_, err := checkPlanConflict("auth", true, strings.NewReader("2"+string(byte(3))), &stdout)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, input.ErrInterrupt))
-}
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
 
-func TestCheckPlanConflict_TTY_Choice2_EOF_DuringName(t *testing.T) {
-	projectDir := t.TempDir()
-	chdir(t, projectDir)
-	require.NoError(t, session.Create(".", "auth"))
-	require.NoError(t, os.WriteFile(
-		filepath.Join(session.TasksDir(".", "auth"), "TASK1.md"),
-		[]byte("# Task 1\n"), 0o600))
+	ctx := context.Background()
+	resultCh := make(chan error, 1)
 
-	// Feed "2" then EOF (empty reader after choice byte).
-	var stdout bytes.Buffer
-	_, err := checkPlanConflict("auth", true, strings.NewReader("2"), &stdout)
-	require.Error(t, err)
-	// Should not panic — graceful error on EOF.
+	go func() {
+		_, err := checkPlanConflict(ctx, "auth", true)
+		resultCh <- err
+	}()
+
+	// Select "new session": down + Enter.
+	time.Sleep(200 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "down"})
+	time.Sleep(50 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "return"})
+
+	// Ctrl+C during name input.
+	time.Sleep(200 * time.Millisecond)
+	in.EmitKeypress("\x03", tap.Key{Name: "c", Ctrl: true})
+
+	select {
+	case err := <-resultCh:
+		require.Error(t, err)
+		assert.ErrorIs(t, err, context.Canceled)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out")
+	}
 }
 
 // --- Integration test: planRun wiring after conflict choice 2 ---
@@ -280,11 +391,44 @@ func TestPlanRun_ConflictChoice2_UsesNewSessionName(t *testing.T) {
 		filepath.Join(session.TasksDir(".", "default"), "TASK1.md"),
 		[]byte("# Task 1\n"), 0o600))
 
-	// Simulate conflict prompt: user selects "2", then enters "my-feature".
-	var stdout bytes.Buffer
-	newName, err := checkPlanConflict("default", true, strings.NewReader("2my-feature\r"), &stdout)
-	require.NoError(t, err)
-	assert.Equal(t, "my-feature", newName)
+	in := tap.NewMockReadable()
+	out := tap.NewMockWritable()
+	tap.SetTermIO(in, out)
+	defer tap.SetTermIO(nil, nil)
+
+	ctx := context.Background()
+	resultCh := make(chan struct {
+		name string
+		err  error
+	}, 1)
+
+	go func() {
+		name, err := checkPlanConflict(ctx, "default", true)
+		resultCh <- struct {
+			name string
+			err  error
+		}{name, err}
+	}()
+
+	// Select "new session": down + Enter.
+	time.Sleep(200 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "down"})
+	time.Sleep(50 * time.Millisecond)
+	in.EmitKeypress("", tap.Key{Name: "return"})
+
+	// Type session name + Enter.
+	time.Sleep(200 * time.Millisecond)
+	emitLine(in, "my-feature")
+
+	var newName string
+	select {
+	case r := <-resultCh:
+		require.NoError(t, r.err)
+		newName = r.name
+		assert.Equal(t, "my-feature", newName)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out")
+	}
 
 	// Verify downstream operations use the new session name (not "default"):
 

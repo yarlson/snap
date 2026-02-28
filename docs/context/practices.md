@@ -92,25 +92,38 @@
 
 ## Terminal Input Handling
 
-**Interactive TTY input for plan command (Phase 1)**:
+**Interactive TTY input via tap components (`github.com/yarlson/tap`)**:
 
-- Use `tap.Text(ctx, TextOptions)` from `github.com/yarlson/tap` library for styled interactive text input
-- Provides placeholder text, validation callbacks, and abort support (Ctrl+C, Escape)
-- Dispatch based on TTY detection: use tap.Text for TTY, bufio.Scanner for piped input
-- Validation callback returns error for empty input: "enter a message, or /done to finish"
-- Returns empty string on user abort (Ctrl+C or Escape) — convert to `context.Canceled` for graceful shutdown
+- `tap.Text(ctx, TextOptions)` — styled text input with validation, placeholder, and abort support (Ctrl+C, Escape)
+  - Used in Phase 1 for requirements gathering and in conflict guard for session name entry
+  - Validation callback rejects invalid input; tap displays error inline and keeps user in prompt (field content preserved)
+  - Returns empty string on user abort (Ctrl+C or Escape) — convert to `context.Canceled` for graceful shutdown
+- `tap.Select(ctx, SelectOptions[T])` — styled selection prompt with arrow-key navigation
+  - Used in conflict guard for replan/new-session choice
+  - First option pre-selected; user navigates with up/down arrows, confirms with Enter
+  - Ctrl+C or Escape returns zero value — convert to `context.Canceled`
 
 **Input mode selection**:
 
 - Detect TTY: `input.IsTerminal(file)` checks if file is connected to terminal
+- For plan conflict guard: use tap.Select + tap.Text for TTY, return error for non-TTY
 - For plan Phase 1: dispatch to tap.Text (TTY) or bufio.Scanner (piped)
 - For run command reader: use structured input mode when TTY detected, buffered input when piped
 
 **Error handling in interactive input**:
 
-- For tap.Text: empty string result with no context error signals user abort — convert to `context.Canceled`
+- For tap.Text/tap.Select: empty/zero result with no context error signals user abort — convert to `context.Canceled`
 - EOF from Scanner — transition to next phase or exit with graceful completion
 - All other errors — propagate with context
+
+**Testing tap components (mock pattern)**:
+
+- Create mock I/O: `tap.NewMockReadable()`, `tap.NewMockWritable()`
+- Set global terminal I/O: `tap.SetTermIO(in, out)` / `defer tap.SetTermIO(nil, nil)`
+- Run component in goroutine to prevent deadlock; emit keypresses asynchronously with `time.Sleep` for sync
+- Key emission: `in.EmitKeypress(str, tap.Key{Name: str})` for characters; `tap.Key{Name: "return"}` for Enter; `tap.Key{Name: "down"}` for arrow down; `tap.Key{Name: "backspace"}` for backspace; `tap.Key{Name: "c", Ctrl: true}` for Ctrl+C
+- Tests using `SetTermIO` must NOT use `t.Parallel()` (global state)
+- After validation error, tap keeps field content — emit backspace characters to clear before typing corrected input
 
 ## Visual Validation
 
