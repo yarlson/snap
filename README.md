@@ -70,6 +70,8 @@ TASK2.md ──┘                      ▼ next task
 
 Steps 1, 2, and 4 use a thinking model (Opus) for deep analysis. The rest use a fast model (Haiku) for speed. Context carries across steps within a task.
 
+After each task, snap updates `docs/context/` — a project knowledge base it maintains itself. Architecture decisions, conventions, terminology, and domain knowledge accumulate as tasks complete. Task 10 understands the codebase as well as task 1 built it.
+
 ## Steering while it runs
 
 While snap works, type a directive and press Enter. It queues up and runs between steps.
