@@ -49,6 +49,8 @@ snap run my-feature            # Implements everything
 
 On a fresh project with no sessions, `snap plan` automatically creates a session. You can also pre-create named sessions with `snap new <name>`.
 
+If you run `snap plan` again on a session with existing planning artifacts, snap will prompt you to either clean up and re-plan, or create a new session (in interactive mode). Non-interactive mode shows clear instructions to prevent accidental overwrites.
+
 Or skip the chat and feed a requirements file:
 
 ```bash

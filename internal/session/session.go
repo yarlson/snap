@@ -205,6 +205,61 @@ func MarkPlanStarted(projectRoot, name string) error {
 	return os.WriteFile(markerPath, []byte(""), 0o600)
 }
 
+// artifactNames are exact filenames considered planning artifacts.
+var artifactNames = map[string]bool{
+	"PRD.md":        true,
+	"TECHNOLOGY.md": true,
+	"DESIGN.md":     true,
+}
+
+// HasArtifacts reports whether a session's tasks directory contains any
+// planning artifacts (TASK*.md, PRD.md, TECHNOLOGY.md, DESIGN.md).
+// Returns false on read error or empty directory.
+func HasArtifacts(projectRoot, name string) bool {
+	td := TasksDir(projectRoot, name)
+	entries, err := os.ReadDir(td)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if taskFileRegex.MatchString(entry.Name()) || artifactNames[entry.Name()] {
+			return true
+		}
+	}
+	return false
+}
+
+// CleanSession removes all files from the session's tasks directory,
+// state.json, and .plan-started marker. Leaves the session directory intact.
+// Missing files are ignored.
+func CleanSession(projectRoot, name string) error {
+	td := TasksDir(projectRoot, name)
+	entries, err := os.ReadDir(td)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read tasks directory: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if err := os.Remove(filepath.Join(td, entry.Name())); err != nil {
+			return fmt.Errorf("remove %s: %w", entry.Name(), err)
+		}
+	}
+
+	sd := Dir(projectRoot, name)
+	for _, f := range []string{"state.json", ".plan-started"} {
+		if err := os.Remove(filepath.Join(sd, f)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove %s: %w", f, err)
+		}
+	}
+
+	return nil
+}
+
 // TaskStatus describes one task file's completion state.
 type TaskStatus struct {
 	ID        string

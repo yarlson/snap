@@ -408,6 +408,150 @@ func TestMarkPlanStarted_Idempotent(t *testing.T) {
 	assert.True(t, HasPlanHistory(root, "auth"))
 }
 
+// --- Unit tests: HasArtifacts ---
+
+func TestHasArtifacts_EmptySession(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+
+	assert.False(t, HasArtifacts(root, "auth"))
+}
+
+func TestHasArtifacts_TaskFile(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+	require.NoError(t, os.WriteFile(filepath.Join(TasksDir(root, "auth"), "TASK1.md"), []byte("# Task 1\n"), 0o600))
+
+	assert.True(t, HasArtifacts(root, "auth"))
+}
+
+func TestHasArtifacts_PRDOnly(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+	require.NoError(t, os.WriteFile(filepath.Join(TasksDir(root, "auth"), "PRD.md"), []byte("# PRD\n"), 0o600))
+
+	assert.True(t, HasArtifacts(root, "auth"))
+}
+
+func TestHasArtifacts_TechnologyOnly(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+	require.NoError(t, os.WriteFile(filepath.Join(TasksDir(root, "auth"), "TECHNOLOGY.md"), []byte("# Tech\n"), 0o600))
+
+	assert.True(t, HasArtifacts(root, "auth"))
+}
+
+func TestHasArtifacts_DesignOnly(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+	require.NoError(t, os.WriteFile(filepath.Join(TasksDir(root, "auth"), "DESIGN.md"), []byte("# Design\n"), 0o600))
+
+	assert.True(t, HasArtifacts(root, "auth"))
+}
+
+func TestHasArtifacts_PlanMarkerOnly(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+	require.NoError(t, os.WriteFile(filepath.Join(Dir(root, "auth"), ".plan-started"), []byte(""), 0o600))
+
+	assert.False(t, HasArtifacts(root, "auth"))
+}
+
+func TestHasArtifacts_NonMatchingFiles(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+	td := TasksDir(root, "auth")
+	require.NoError(t, os.WriteFile(filepath.Join(td, "README.md"), []byte("# Readme\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, "notes.txt"), []byte("notes\n"), 0o600))
+
+	assert.False(t, HasArtifacts(root, "auth"))
+}
+
+func TestHasArtifacts_NonexistentSession(t *testing.T) {
+	root := t.TempDir()
+
+	assert.False(t, HasArtifacts(root, "nonexistent"))
+}
+
+// --- Integration tests: CleanSession ---
+
+func TestCleanSession_RemovesAllFiles(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+
+	td := TasksDir(root, "auth")
+	sd := Dir(root, "auth")
+	require.NoError(t, os.WriteFile(filepath.Join(td, "TASK1.md"), []byte("# Task 1\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(td, "PRD.md"), []byte("# PRD\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(sd, "state.json"), []byte("{}"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(sd, ".plan-started"), []byte(""), 0o600))
+
+	err := CleanSession(root, "auth")
+	require.NoError(t, err)
+
+	// All task files removed.
+	entries, err := os.ReadDir(td)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+
+	// state.json removed.
+	_, err = os.Stat(filepath.Join(sd, "state.json"))
+	assert.True(t, os.IsNotExist(err))
+
+	// .plan-started removed.
+	_, err = os.Stat(filepath.Join(sd, ".plan-started"))
+	assert.True(t, os.IsNotExist(err))
+
+	// Session directory still exists.
+	info, err := os.Stat(sd)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
+func TestCleanSession_EmptySession(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+
+	err := CleanSession(root, "auth")
+	assert.NoError(t, err)
+}
+
+func TestCleanSession_MissingStateJSON(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+	require.NoError(t, os.WriteFile(filepath.Join(TasksDir(root, "auth"), "TASK1.md"), []byte("# Task 1\n"), 0o600))
+
+	err := CleanSession(root, "auth")
+	assert.NoError(t, err)
+}
+
+func TestCleanSession_MissingPlanMarker(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+	require.NoError(t, os.WriteFile(filepath.Join(TasksDir(root, "auth"), "TASK1.md"), []byte("# Task 1\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(Dir(root, "auth"), "state.json"), []byte("{}"), 0o600))
+
+	err := CleanSession(root, "auth")
+	assert.NoError(t, err)
+}
+
+func TestCleanSession_LeavesSessionDir(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, Create(root, "auth"))
+	require.NoError(t, os.WriteFile(filepath.Join(TasksDir(root, "auth"), "TASK1.md"), []byte("# Task 1\n"), 0o600))
+
+	err := CleanSession(root, "auth")
+	require.NoError(t, err)
+
+	// Session directory intact.
+	assert.True(t, Exists(root, "auth"))
+
+	// Tasks directory intact.
+	info, err := os.Stat(TasksDir(root, "auth"))
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
 // --- Unit tests: EnsureDefault ---
 
 func TestEnsureDefault_CreatesWhenAbsent(t *testing.T) {

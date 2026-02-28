@@ -245,7 +245,45 @@ func TestE2E_PlanAutoDetectSingleSession(t *testing.T) {
 }
 
 // Test: file listing printed after plan completion.
+// This test uses an empty session (no artifacts) so the conflict guard is not triggered.
 func TestE2E_PlanFileListing(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	binPath := buildSnap(t)
+	projectDir := t.TempDir()
+	ctx := context.Background()
+
+	// Step 1: Create session (empty — no conflict guard trigger).
+	create := exec.CommandContext(ctx, binPath, "new", "auth")
+	create.Dir = projectDir
+	out, err := create.CombinedOutput()
+	require.NoError(t, err, "snap new failed: %s", out)
+
+	// Step 2: Run plan (mock provider outputs nothing, so no files generated).
+	mockPath := mockPlanProvider(t)
+
+	plan := exec.CommandContext(ctx, binPath, "plan", "auth")
+	plan.Dir = projectDir
+	plan.Env = append(os.Environ(), "PATH="+mockPath)
+	plan.Stdin = strings.NewReader("/done\n")
+
+	output, planErr := plan.CombinedOutput()
+	require.NoError(t, planErr, "snap plan failed: %s", output)
+
+	outputStr := string(output)
+
+	// Planning should proceed without conflict prompt.
+	assert.Contains(t, outputStr, "Planning session 'auth'")
+	assert.Contains(t, outputStr, "Planning complete")
+
+	// Assert run instruction is printed after plan completion.
+	assert.Contains(t, outputStr, "Run: snap run auth")
+}
+
+// Test: snap plan on non-empty session with piped input returns conflict error.
+func TestE2E_PlanConflictNonTTY(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping E2E test in short mode")
 	}
@@ -260,12 +298,11 @@ func TestE2E_PlanFileListing(t *testing.T) {
 	out, err := create.CombinedOutput()
 	require.NoError(t, err, "snap new failed: %s", out)
 
-	// Step 2: Place files in tasks directory to simulate prior generation.
+	// Step 2: Place a task file to trigger conflict guard.
 	tasksDir := filepath.Join(projectDir, ".snap", "sessions", "auth", "tasks")
-	require.NoError(t, os.WriteFile(filepath.Join(tasksDir, "PRD.md"), []byte("# PRD\n"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(tasksDir, "TECHNOLOGY.md"), []byte("# Tech\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tasksDir, "TASK1.md"), []byte("# Task 1\n"), 0o600))
 
-	// Step 3: Run plan.
+	// Step 3: Run plan with piped input (non-TTY).
 	mockPath := mockPlanProvider(t)
 
 	plan := exec.CommandContext(ctx, binPath, "plan", "auth")
@@ -274,17 +311,13 @@ func TestE2E_PlanFileListing(t *testing.T) {
 	plan.Stdin = strings.NewReader("/done\n")
 
 	output, planErr := plan.CombinedOutput()
-	require.NoError(t, planErr, "snap plan failed: %s", output)
+	require.Error(t, planErr, "snap plan should fail with conflict error")
 
 	outputStr := string(output)
-
-	// Assert file listing contains the pre-placed files.
-	assert.Contains(t, outputStr, "Files in")
-	assert.Contains(t, outputStr, "PRD.md")
-	assert.Contains(t, outputStr, "TECHNOLOGY.md")
-
-	// Assert run instruction is printed after plan completion.
-	assert.Contains(t, outputStr, "Run: snap run auth")
+	assert.Contains(t, outputStr, "already has planning artifacts")
+	assert.Contains(t, outputStr, "snap delete auth")
+	assert.Contains(t, outputStr, "snap new")
+	assert.Contains(t, outputStr, "snap plan")
 }
 
 // Test: snap plan with multiple sessions and no name shows error.

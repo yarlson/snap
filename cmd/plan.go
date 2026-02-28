@@ -42,6 +42,13 @@ func planRun(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Conflict guard: check for existing planning artifacts.
+	isTTY := input.IsTerminal(os.Stdin)
+	sessionName, err = checkPlanConflict(sessionName, isTTY, os.Stdin, os.Stdout)
+	if err != nil {
+		return err
+	}
+
 	// Pre-flight: validate provider CLI is available in PATH.
 	providerName := provider.ResolveProviderName()
 	if err := provider.ValidateCLI(providerName); err != nil {
@@ -149,6 +156,61 @@ func formatMultiplePlanSessionsError(sessions []session.Info) error {
 	}
 	b.WriteString("\nSpecify a session:\n  snap plan <name>")
 	return fmt.Errorf("%s", b.String())
+}
+
+// checkPlanConflict detects existing planning artifacts and either prompts
+// the user (TTY) or returns an error (non-TTY). Returns the session name to
+// proceed with, or an error to abort.
+func checkPlanConflict(sessionName string, isTTY bool, stdin io.Reader, stdout io.Writer) (string, error) {
+	if !session.HasArtifacts(".", sessionName) {
+		return sessionName, nil
+	}
+
+	if !isTTY {
+		return "", fmt.Errorf(
+			"session %q already has planning artifacts\n\n"+
+				"To re-plan, clean up first:\n"+
+				"  snap delete %s && snap new %s\n\n"+
+				"Or plan in a new session:\n"+
+				"  snap new <name> && snap plan <name>",
+			sessionName, sessionName, sessionName)
+	}
+
+	// TTY: display prompt and read single-character choice.
+	prompt := fmt.Sprintf("Session %q already has planning artifacts.\n\n"+
+		"  [1] Clean up and re-plan this session\n\n",
+		sessionName)
+	fmt.Fprint(stdout, prompt)
+
+	label := ui.ResolveStyle(ui.WeightBold) +
+		ui.ResolveColor(ui.ColorSecondary) +
+		"Choice (1): " +
+		ui.ResolveStyle(ui.WeightNormal)
+	fmt.Fprint(stdout, label)
+
+	buf := make([]byte, 1)
+	for {
+		n, err := stdin.Read(buf)
+		if err != nil {
+			return "", fmt.Errorf("read input: %w", err)
+		}
+		if n == 0 {
+			continue
+		}
+
+		switch buf[0] {
+		case '1':
+			fmt.Fprint(stdout, "1\r\n")
+			if err := session.CleanSession(".", sessionName); err != nil {
+				return "", fmt.Errorf("clean session: %w", err)
+			}
+			return sessionName, nil
+		case 3: // Ctrl+C
+			fmt.Fprint(stdout, "\r\n")
+			return "", input.ErrInterrupt
+		}
+		// All other bytes: ignore.
+	}
 }
 
 // printFileListing prints all files found in the tasks directory.

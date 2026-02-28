@@ -24,6 +24,38 @@ Session resolution logic:
    - 1 session: auto-use it
    - 2+ sessions: error with list and prompt
 
+## Conflict Guard: Planning Artifacts Detection
+
+After session resolution, `snap plan` checks for existing planning artifacts (TASK*.md, PRD.md, TECHNOLOGY.md, DESIGN.md) in the session's tasks directory. If artifacts are found, the behavior depends on input mode:
+
+**TTY (Interactive Terminal)**:
+- Displays conflict prompt:
+  ```
+  Session '<name>' already has planning artifacts.
+
+    [1] Clean up and re-plan this session
+
+  Choice (1):
+  ```
+- User presses `1` to clean all artifacts and proceed with re-planning
+- Session directory and structure remain intact; only task files and state are removed
+- User can press Ctrl+C to abort
+
+**Non-TTY (Piped/Redirected Input)**:
+- Returns error with instructions:
+  ```
+  session '<name>' already has planning artifacts
+
+  To re-plan, clean up first:
+    snap delete <name> && snap new <name>
+
+  Or plan in a new session:
+    snap new <name> && snap plan <name>
+  ```
+- Prevents accidental overwriting of planning artifacts in automated/CI scenarios
+
+The conflict guard ensures users don't accidentally overwrite planning artifacts without explicit confirmation.
+
 ## Two-Phase Pipeline
 
 ### Phase 1: Interactive Requirements Gathering
@@ -177,7 +209,7 @@ After successful completion:
 
 ## Integration Points
 
-- **session package**: `Resolve()`, `List()`, `Dir()`, `TasksDir()`, `EnsureDefault()`, `HasPlanHistory()`, `MarkPlanStarted()`
+- **session package**: `Resolve()`, `List()`, `Dir()`, `TasksDir()`, `EnsureDefault()`, `HasPlanHistory()`, `MarkPlanStarted()`, `HasArtifacts()`, `CleanSession()`
 - **provider package**: `ResolveProviderName()`, `ValidateCLI()`, `NewExecutorFromEnv()`
 - **workflow package**: `Executor` interface (LLM calls)
 - **ui package**: `Interrupted()` formatting function
@@ -217,6 +249,7 @@ Located in `cmd/plan.go`:
 - `planCmd` — Cobra command definition
 - `planRun()` — Entry point orchestrating full pipeline
 - `resolvePlanSession()` — Session name resolution logic
+- `checkPlanConflict()` — Conflict guard: detects existing artifacts and handles TTY/non-TTY cases
 - `formatMultiplePlanSessionsError()` — Error message formatting
 - `printFileListing(w io.Writer, tasksDir string)` — Directory listing after completion with formatted output via io.Writer
 - Signal handler setup in `planRun()`
