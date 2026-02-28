@@ -76,8 +76,24 @@ func EnsureCompleteness(data EnsureCompletenessData) (string, error) {
 // LintAndTest returns the lint-and-test prompt.
 func LintAndTest() string { return strings.TrimSpace(lintAndTest) }
 
-// CodeReview returns the full embedded code review prompt.
-func CodeReview() string { return strings.TrimSpace(codeReview) }
+// CodeReviewData holds template parameters for the code review prompt.
+type CodeReviewData struct {
+	TaskPath string
+	TaskID   string
+}
+
+// CodeReview renders the code review prompt template with the given data.
+func CodeReview(data CodeReviewData) (string, error) {
+	tmpl, err := template.New("code_review").Parse(codeReview)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(buf.String()), nil
+}
 
 // ApplyFixes returns the apply-fixes prompt.
 func ApplyFixes() string { return strings.TrimSpace(applyFixes) }

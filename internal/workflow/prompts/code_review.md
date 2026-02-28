@@ -2,29 +2,26 @@
 
 1. Read CLAUDE.md or AGENTS.md if present — understand project conventions and tech stack
 2. Read docs/context/context-map.md, then summary.md and practices.md for project context
+   {{- if .TaskPath}}
+3. Read {{.TaskPath}} — this is the task ({{.TaskID}}) that was just implemented
+   {{- end}}
 
 ## Scope
 
 This review is read-only. Do not modify any code. Suggested patches are advisory.
 
 Review uncommitted code changes in the local working tree before they are committed. All changes at this point are local and uncommitted (staged + unstaged).
+{{if .TaskPath}}
+**Task scope:** Read {{.TaskPath}} to understand what {{.TaskID}} required. Use this to judge every change:
+
+- **In scope**: changes that directly implement the task's requirements and acceptance criteria, plus reasonable consequences (updating imports, adjusting tests, fixing lint errors introduced by the implementation)
+- **Out of scope**: changes unrelated to the task — refactoring, formatting, feature additions, or modifications to code outside the task's domain
+
+Flag out of scope changes as findings — they bypass focused review and complicate rollback.
+{{- else}}No specific task file available. Review all changes on their own merit.
+{{- end}}
 
 **Review philosophy:** Find issues that matter. No nitpicking. Focus on: data loss, security breaches, performance degradation, and production incidents. Explain risk in business terms — "attacker can X" not just "this is insecure."
-
-## Diff Strategy
-
-All changes are uncommitted. Use `git diff HEAD` to see everything:
-
-```bash
-# 1. Full diff of all uncommitted changes (staged + unstaged)
-git diff HEAD
-
-# 2. Changed file list
-git diff HEAD --name-only
-
-# 3. Diff stats (quick size check before deep review)
-git diff HEAD --stat
-```
 
 ## Review Phases (Quick Mode: Phases 1-5)
 
@@ -38,8 +35,11 @@ Execute ALL phases in order. Never skip phases.
 4. Read the diff itself for line-level analysis.
 5. Identify the change category: new feature, bug fix, refactor, security fix, performance optimization, dependency update.
 6. Identify critical paths: auth, payments, data writes, external APIs, file system operations.
+   {{- if .TaskPath}}
+7. Compare the changed files against the task requirements. Note which changes are in scope (implementing {{.TaskID}}) and which are unrelated.
+   {{- end}}
 
-Output: 2-3 sentence summary of what changed and why.
+Output: 2-3 sentence summary of what changed and why.{{if .TaskPath}} Include whether changes align with the task scope.{{end}}
 
 ### Phase 2: Classify Risk
 
@@ -72,8 +72,8 @@ Check every changed line against these categories:
 
 - SQL queries use parameterized statements (no string concatenation)?
 - User inputs sanitized before database queries?
-- No `eval()`, `exec()`, or `Function()` with user input?
-- Command injection prevented (no `shell=True` / unsanitized args to spawn)?
+- No dynamic code execution (`eval`, `exec`, etc.) with user input?
+- Command injection prevented (no unsanitized arguments to shell/process calls)?
 - HTML output escaped to prevent XSS?
 
 **Insecure design:**
@@ -188,7 +188,9 @@ Fix:
   [corrected code]
 ```
 
-## Output Structure
+## Output
+
+The review is complete when all phases are executed and the following structure is produced:
 
 ```
 ## Review Summary

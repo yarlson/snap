@@ -639,10 +639,11 @@ func TestRunner_EmbeddedPrompts(t *testing.T) {
 	assert.Contains(t, capturedPrompts[3], "AGENTS.md")
 	assert.Contains(t, capturedPrompts[3], "linters")
 
-	// Step 4: Code review — full embedded skill with context loading, not delegation
+	// Step 4: Code review — full embedded skill with context loading and task scope
 	assert.Contains(t, capturedPrompts[4], "CLAUDE.md")
 	assert.Contains(t, capturedPrompts[4], "git diff HEAD")
 	assert.Contains(t, capturedPrompts[4], "CRITICAL")
+	assert.Contains(t, capturedPrompts[4], "TASK1")
 	assert.NotContains(t, capturedPrompts[4], "Use the code-review skill")
 
 	// Step 5: Apply fixes
