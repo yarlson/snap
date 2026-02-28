@@ -66,6 +66,8 @@
 
 **TAP Select** — Component from `github.com/yarlson/tap` library providing styled selection prompt with arrow-key navigation. First option is pre-selected; user navigates with up/down arrows, confirms with Enter, cancels with Ctrl+C or Escape (returns zero value). Used in plan command conflict guard for replan/new-session choice.
 
+**TAP Confirm** — Component from `github.com/yarlson/tap` library providing styled Yes/No confirmation prompt with radio buttons. User toggles with left/right arrows, confirms with Enter, or presses y/n directly. Cancels with Ctrl+C (returns false). Used in delete command for session deletion confirmation.
+
 **TAP Mock Pattern** — Testing strategy for tap components using `tap.NewMockReadable()`, `tap.NewMockWritable()`, and `tap.SetTermIO(in, out)`. Tests run the component in a goroutine and emit keypresses asynchronously with `time.Sleep` for synchronization. Tests using `SetTermIO` must NOT run in parallel (global state). After validation error, tap keeps field content — tests must emit backspace characters to clear before typing corrected input.
 
 **Brief** — Extracted requirements from Phase 1 conversation or provided via `--from` file, used as input to Phase 2 document generation prompts.

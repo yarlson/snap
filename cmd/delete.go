@@ -1,11 +1,14 @@
 package cmd
 
 import (
-	"bufio"
+	"context"
 	"fmt"
-	"strings"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/yarlson/tap"
 
 	"github.com/yarlson/snap/internal/session"
 )
@@ -28,17 +31,24 @@ func init() {
 
 func deleteRun(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	out := cmd.OutOrStdout()
 
 	if !forceDelete {
-		fmt.Fprintf(out, "Delete session '%s' and all its files? (y/N) ", name)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-		scanner := bufio.NewScanner(cmd.InOrStdin())
-		if !scanner.Scan() {
-			return nil
-		}
-		answer := strings.TrimSpace(scanner.Text())
-		if !strings.EqualFold(answer, "y") {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			cancel()
+		}()
+
+		confirmed := tap.Confirm(ctx, tap.ConfirmOptions{
+			Message:  fmt.Sprintf("Delete session '%s' and all its files?", name),
+			Active:   "Yes",
+			Inactive: "No",
+		})
+		if !confirmed {
 			return nil
 		}
 	}
@@ -47,6 +57,6 @@ func deleteRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(out, "Deleted session '%s'\n", name)
+	fmt.Fprintf(cmd.OutOrStdout(), "Deleted session '%s'\n", name)
 	return nil
 }

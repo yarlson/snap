@@ -92,8 +92,8 @@ var deleteCmd = &cobra.Command{
 
 **deleteRun function** (`cmd/delete.go`):
 
-1. Prompts for confirmation: `"Delete session '<name>' and all its files? (y/N) "`
-2. Accepts `y` or `Y` as confirmation (case-insensitive)
+1. Uses `tap.Confirm` for interactive Yes/No confirmation with styled radio buttons
+2. Sets up signal handling (SIGINT/SIGTERM) to cancel the prompt gracefully
 3. Skips confirmation when `--force` flag is used
 4. Calls `session.Delete(".", name)` to remove directory
 5. Returns error if session not found
@@ -279,10 +279,10 @@ snap run my-project
 **Delete command tests** (`cmd/delete_test.go`):
 
 - `TestDelete_WithForceFlag()` — Verifies force flag skips confirmation prompt
-- `TestDelete_WithConfirmation()` — Verifies confirmation prompt blocks deletion on non-yes answer
-- `TestDelete_NotFound()` — Verifies error when deleting non-existent session
-- `TestDelete_InvalidName()` — Verifies error for invalid session names
-- `TestDelete_Confirmation()` — Verifies default confirmation prompt is displayed and works correctly
+- `TestDelete_WithConfirmationYes()` — Verifies tap.Confirm prompt accepts "y" and deletes session
+- `TestDelete_WithConfirmationNo()` — Verifies tap.Confirm prompt rejects "n" and preserves session
+- `TestDelete_WithConfirmationCtrlC()` — Verifies Ctrl+C cancels prompt and preserves session
+- `TestDelete_NonexistentSession()` — Verifies error when deleting non-existent session
 
 **List command tests** (`cmd/list_test.go`):
 
@@ -342,7 +342,7 @@ The main run logic was refactored from `cmd/root.go` to `cmd/run.go` as an expli
 - **Name validation**: Sessions must use alphanumeric names with hyphens/underscores (1-64 chars); prevents filesystem issues
 - **Gitignore coverage**: `.snap/sessions/` is git-ignored to prevent session state/artifacts from being committed
 - **Session listing**: Reads session metadata (task counts, completion status) from directories and state.json; status derived from workflow state
-- **Delete confirmation**: Default interactive prompt with --force flag to skip; prevents accidental deletion
+- **Delete confirmation**: Uses `tap.Confirm` for styled Yes/No prompt with --force flag to skip; prevents accidental deletion
 - **Status derivation**: Combines multiple signals (state.json, task file count, .plan-started marker) to compute session status
 - **Plan resumption**: Detects prior planning via marker file; uses -c flag for conversation continuity when resuming
 - **Marker timing**: .plan-started marker created after first successful executor call, enabling clean plan startup tracking
