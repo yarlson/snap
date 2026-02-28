@@ -249,6 +249,10 @@ After successful completion:
   - Line reading with Ctrl+C handling
   - Backspace and line editing
   - Escape sequence consumption
+- TAP Text integration tests: `internal/plan/tap_integration_test.go`
+  - Validates tap.Text input component from `github.com/yarlson/tap` library as alternative input mechanism
+  - Tests via mock I/O: submit with content, validation rejection (empty input), Ctrl+C abort, Escape abort, context cancellation
+  - Proves TAP Text integration strategy for future Phase 1 input refactoring
 
 ## Command Implementation
 

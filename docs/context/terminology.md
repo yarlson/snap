@@ -64,6 +64,8 @@
 
 **ReadLine** — Function that displays a styled prompt, reads one line of input in raw mode, and returns the submitted text. Supports full cursor movement and mid-line editing: arrow keys move cursor within the line, Backspace deletes at any position, printable characters insert at cursor, Enter submits regardless of cursor position, Ctrl+U clears the line, Ctrl+W deletes the word before cursor. Handles Ctrl+C (`ErrInterrupt`), escape sequences (consumed), and UTF-8 multi-byte characters. Prompt styling uses ColorSecondary + WeightBold, respecting NO_COLOR.
 
+**TAP Text** — Component from `github.com/yarlson/tap` library providing styled interactive text input with validation. Supports Ctrl+C (cancel), Escape (cancel), validation callbacks, and context cancellation. Tested as alternative input mechanism for Phase 1 planning via mock-based integration tests in `internal/plan/tap_integration_test.go`.
+
 **ErrInterrupt** — Error returned by `ReadLine()` when user presses Ctrl+C in raw mode, used to signal planning abort (converted to `context.Canceled`).
 
 **Brief** — Extracted requirements from Phase 1 conversation or provided via `--from` file, used as input to Phase 2 document generation prompts.
