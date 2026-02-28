@@ -111,10 +111,13 @@ Planner supports two input modes:
 
 ### Phase 2: Autonomous Document Generation
 
-- Claude generates 4 planning documents based on brief via a 3-step pipeline:
+- Claude generates task files based on brief via a 6-step pipeline:
   1. **PRD.md** — Product requirements document (features, acceptance criteria, scope)
   2. **TECHNOLOGY.md** and **DESIGN.md** — Technology decisions and design specification (generated in parallel)
-  3. **TASK\*.md** — Individual task files (TASK1.md, TASK2.md, etc.)
+  3. **Task list creation** — Initial rough task breakdown based on PRD, TECHNOLOGY, and DESIGN
+  4. **Task assessment** — Evaluates each task against anti-pattern criteria (horizontal slices, infrastructure-only, too broad, too narrow, non-demoable)
+  5. **Task refinement** — Fixes flagged tasks via merging, splitting, or reworking to create demoable vertical slices
+  6. **TASKS.md generation** — Writes final task summary with sections A–J (overview, assumptions, principles, CUJs, epics, capability map, task list, dependencies, risks, coverage)
 - Each document generated via LLM call with specialized prompt template
 - **Engineering principles preamble**: All Phase 2 prompts are prepended with shared engineering principles (KISS, DRY, SOLID, YAGNI) to guide consistent decision-making across all generated documents
 - Documents written to `.snap/sessions/<session>/tasks/`
@@ -134,14 +137,35 @@ Phase 2 flow:
    - Call LLM executor for both concurrently via errgroup
    - Write TECHNOLOGY.md and DESIGN.md to tasks directory
    - Display individual sub-step completions with timing
-3. **Step 3 (Sequential)**: Generate task files
-   - Render task-splitting prompt template
+3. **Step 3 (Sequential)**: Create task list
+   - Render create-tasks prompt template (reads PRD, TECHNOLOGY, DESIGN from conversation)
    - Prepend engineering principles preamble
-   - Call LLM executor to split PRD+TECHNOLOGY+DESIGN into individual tasks
-   - Write TASK\*.md files to tasks directory
+   - Call LLM executor in fresh conversation (no -c flag)
+   - Produces rough task list in conversation (no files written yet)
    - Display step completion
-4. Print file listing showing generated files
-5. Print "Run: snap run <session>" suggestion
+4. **Step 4 (Sequential)**: Assess tasks
+   - Render assess-tasks prompt template
+   - Call LLM executor with -c flag (continues create-tasks conversation)
+   - No preamble (already in conversation context from step 3)
+   - Scores each task against 5 anti-patterns (horizontal, infrastructure-only, too broad, too narrow, non-demoable)
+   - Output in conversation (no files written yet)
+   - Display step completion
+5. **Step 5 (Sequential)**: Refine tasks
+   - Render merge-tasks prompt template
+   - Call LLM executor with -c flag (continues conversation chain)
+   - No preamble (operates on assessed task list from conversation)
+   - Fixes flagged tasks via merging, splitting, absorbing, or reworking
+   - Performs self-check re-verification against anti-patterns
+   - Output in conversation (no files written yet)
+   - Display step completion
+6. **Step 6 (Sequential)**: Generate task summary
+   - Render generate-task-summary prompt template
+   - Prepend engineering principles preamble
+   - Call LLM executor with -c flag (continues conversation chain)
+   - Write TASKS.md with sections A–J to tasks directory
+   - Display step completion
+7. Print file listing showing generated files
+8. Print "Run: snap run <session>" suggestion
 
 ### Engineering Principles
 

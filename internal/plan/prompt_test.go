@@ -66,18 +66,69 @@ func TestRenderDesignPrompt(t *testing.T) {
 	assert.Contains(t, result, "Completion")
 }
 
-func TestRenderTasksPrompt(t *testing.T) {
-	result, err := RenderTasksPrompt(".snap/sessions/auth/tasks")
+func TestRenderCreateTasksPrompt(t *testing.T) {
+	result, err := RenderCreateTasksPrompt(".snap/sessions/auth/tasks")
 	require.NoError(t, err)
 
 	assert.Contains(t, result, ".snap/sessions/auth/tasks/PRD.md")
 	assert.Contains(t, result, ".snap/sessions/auth/tasks/TECHNOLOGY.md")
 	assert.Contains(t, result, ".snap/sessions/auth/tasks/DESIGN.md")
-	assert.Contains(t, result, ".snap/sessions/auth/tasks/TASKS.md")
-	assert.Contains(t, result, ".snap/sessions/auth/tasks/TASK")
+	assert.Contains(t, result, "Walking Skeleton")
+	assert.Contains(t, result, "source files, tests, and build tooling already exist")
+	assert.Contains(t, result, "Scope (In) bullets")
+	assert.Contains(t, result, "Acceptance criteria")
 	assert.Contains(t, result, "vertical slice")
 	assert.Contains(t, result, "CLAUDE.md")
 	assert.Contains(t, result, "docs/context/")
+	assert.Contains(t, result, "Guardrails")
+}
+
+func TestRenderAssessTasksPrompt(t *testing.T) {
+	result, err := RenderAssessTasksPrompt()
+	require.NoError(t, err)
+
+	// All 5 anti-pattern names.
+	assert.Contains(t, result, "Horizontal Slice")
+	assert.Contains(t, result, "Infrastructure/Docs-Only")
+	assert.Contains(t, result, "Too Broad")
+	assert.Contains(t, result, "Too Narrow")
+	assert.Contains(t, result, "Non-Demoable")
+
+	// All verdict labels.
+	assert.Contains(t, result, "PASS")
+	assert.Contains(t, result, "MERGE")
+	assert.Contains(t, result, "ABSORB")
+	assert.Contains(t, result, "SPLIT")
+	assert.Contains(t, result, "REWORK")
+
+	assert.Contains(t, result, "Guardrails")
+}
+
+func TestRenderMergeTasksPrompt(t *testing.T) {
+	result, err := RenderMergeTasksPrompt()
+	require.NoError(t, err)
+
+	assert.Contains(t, result, "MERGE")
+	assert.Contains(t, result, "ABSORB")
+	assert.Contains(t, result, "SPLIT")
+	assert.Contains(t, result, "REWORK")
+	assert.Contains(t, result, "Re-verify")
+	assert.Contains(t, result, "Guardrails")
+}
+
+func TestRenderGenerateTaskSummaryPrompt(t *testing.T) {
+	result, err := RenderGenerateTaskSummaryPrompt(".snap/sessions/auth/tasks")
+	require.NoError(t, err)
+
+	assert.Contains(t, result, ".snap/sessions/auth/tasks/TASKS.md")
+	assert.Contains(t, result, "CLAUDE.md")
+	assert.Contains(t, result, "docs/context/")
+
+	// Sections A through J.
+	for _, section := range []string{"A.", "B.", "C.", "D.", "E.", "F.", "G.", "H.", "I.", "J."} {
+		assert.Contains(t, result, section, "should contain section %s", section)
+	}
+
 	assert.Contains(t, result, "Guardrails")
 	assert.Contains(t, result, "Completion")
 }
@@ -134,14 +185,24 @@ func TestPreamblePrepended_Design(t *testing.T) {
 	assert.True(t, strings.HasPrefix(result, preamble), "Design prompt should start with preamble")
 }
 
-func TestPreamblePrepended_Tasks(t *testing.T) {
-	result, err := RenderTasksPrompt(".snap/sessions/auth/tasks")
+func TestPreamblePrepended_CreateTasks(t *testing.T) {
+	result, err := RenderCreateTasksPrompt(".snap/sessions/auth/tasks")
 	require.NoError(t, err)
 
 	preamble, err := RenderPrinciplesPreamble()
 	require.NoError(t, err)
 
-	assert.True(t, strings.HasPrefix(result, preamble), "Tasks prompt should start with preamble")
+	assert.True(t, strings.HasPrefix(result, preamble), "CreateTasks prompt should start with preamble")
+}
+
+func TestPreamblePrepended_GenerateTaskSummary(t *testing.T) {
+	result, err := RenderGenerateTaskSummaryPrompt(".snap/sessions/auth/tasks")
+	require.NoError(t, err)
+
+	preamble, err := RenderPrinciplesPreamble()
+	require.NoError(t, err)
+
+	assert.True(t, strings.HasPrefix(result, preamble), "GenerateTaskSummary prompt should start with preamble")
 }
 
 func TestAllPrompts_ContainCodebaseExploration(t *testing.T) {
@@ -152,7 +213,8 @@ func TestAllPrompts_ContainCodebaseExploration(t *testing.T) {
 		{"PRD", func() (string, error) { return RenderPRDPrompt("tasks", "") }},
 		{"Technology", func() (string, error) { return RenderTechnologyPrompt("tasks") }},
 		{"Design", func() (string, error) { return RenderDesignPrompt("tasks") }},
-		{"Tasks", func() (string, error) { return RenderTasksPrompt("tasks") }},
+		{"CreateTasks", func() (string, error) { return RenderCreateTasksPrompt("tasks") }},
+		{"GenerateTaskSummary", func() (string, error) { return RenderGenerateTaskSummaryPrompt("tasks") }},
 	}
 
 	for _, tt := range tests {
