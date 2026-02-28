@@ -109,7 +109,7 @@ On GitHub remotes, after pushing:
 
 Requires `gh` CLI in PATH — pre-validated during startup if you're on a GitHub remote.
 
-### CI Status Monitoring
+### CI Status Monitoring & Auto-Fix
 
 After pushing and creating a PR (or pushing to the default branch), snap monitors GitHub Actions workflows:
 
@@ -118,7 +118,12 @@ After pushing and creating a PR (or pushing to the default branch), snap monitor
 - Individual check status is displayed when ≤5 checks (e.g., `lint: passed, test: running`)
 - When >5 checks exist, status is summarized (e.g., `3 passed, 1 running, 2 pending`)
 - When all checks pass, snap prints `CI passed — PR ready for review` and completes
-- If any check fails, snap reports the failure and stops
+- **If any check fails, snap automatically attempts to fix it**:
+  - Fetches the CI failure logs (in-memory only, never written to disk)
+  - Calls Claude to diagnose the issue and apply a minimal fix
+  - Creates a new commit with message `fix: resolve <check-name> CI failure`
+  - Pushes the fix and re-polls CI
+  - Repeats up to 10 times; if CI still fails after 10 attempts, stops with an error
 
 Status updates only print when check status changes — polls with no changes are silent.
 

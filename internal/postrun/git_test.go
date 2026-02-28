@@ -129,3 +129,30 @@ func TestPush_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(out), "initial")
 }
+
+func TestCommitAll(t *testing.T) {
+	dir := initGitRepo(t)
+	chdir(t, dir)
+
+	// Create uncommitted changes
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "newfile.txt"), []byte("hello"), 0o600))
+
+	err := CommitAll(context.Background(), "add new file")
+	require.NoError(t, err)
+
+	// Verify new commit exists
+	cmd := exec.CommandContext(context.Background(), "git", "log", "--oneline")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "add new file")
+}
+
+func TestCommitAll_NothingToCommit(t *testing.T) {
+	dir := initGitRepo(t)
+	chdir(t, dir)
+
+	err := CommitAll(context.Background(), "empty commit")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nothing to commit")
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -136,4 +137,64 @@ func TestCheckStatus_Empty(t *testing.T) {
 	checks, err := CheckStatus(context.Background(), true, "main")
 	require.NoError(t, err)
 	assert.Empty(t, checks)
+}
+
+func TestTruncateLog_UnderLimit(t *testing.T) {
+	content := strings.Repeat("a", 10*1024) // 10KB
+	result := truncateLog(content)
+	assert.Equal(t, content, result)
+}
+
+func TestTruncateLog_OverLimit(t *testing.T) {
+	content := strings.Repeat("a", 100*1024) // 100KB
+	result := truncateLog(content)
+	assert.Equal(t, maxLogSize, len(result[:maxLogSize]))
+	assert.Len(t, result, maxLogSize+len("\n\n[log truncated — exceeded 50KB limit]"))
+	assert.Contains(t, result, "[log truncated")
+}
+
+func TestTruncateLog_ExactLimit(t *testing.T) {
+	content := strings.Repeat("a", maxLogSize) // exactly 50KB
+	result := truncateLog(content)
+	assert.Equal(t, content, result)
+}
+
+func TestFailureLogs(t *testing.T) {
+	mockGHScript(t, `printf '%s' 'Error: lint failed on line 42'`)
+
+	logs, err := FailureLogs(context.Background(), "12345")
+	require.NoError(t, err)
+	assert.Equal(t, "Error: lint failed on line 42", logs)
+}
+
+func TestFailureLogs_Truncated(t *testing.T) {
+	// Create a gh mock that outputs >50KB
+	binDir := t.TempDir()
+	// Generate a large output via dd
+	script := "#!/bin/sh\ndd if=/dev/zero bs=1024 count=60 2>/dev/null | tr '\\0' 'x'\n"
+	ghPath := filepath.Join(binDir, "gh")
+	require.NoError(t, os.WriteFile(ghPath, []byte(script), 0o755)) //nolint:gosec // test script
+
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+origPath)
+
+	logs, err := FailureLogs(context.Background(), "12345")
+	require.NoError(t, err)
+	assert.Contains(t, logs, "[log truncated")
+}
+
+func TestFailedRunID(t *testing.T) {
+	mockGH(t, `[{"databaseId":98765}]`)
+
+	id, err := FailedRunID(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "98765", id)
+}
+
+func TestFailedRunID_NoRuns(t *testing.T) {
+	mockGH(t, `[]`)
+
+	_, err := FailedRunID(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no failed runs found")
 }

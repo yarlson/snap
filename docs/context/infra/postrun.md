@@ -6,11 +6,13 @@ Post-run operations execute after all tasks are completed. These steps automate 
 
 **Files**:
 
-- `internal/postrun/postrun.go` — Post-run orchestration
-- `internal/postrun/git.go` — Git remote detection, push, and branch tracking
-- `internal/postrun/github.go` — GitHub API operations (PR creation, CI status checking)
+- `internal/postrun/postrun.go` — Post-run orchestration and CI fix loop
+- `internal/postrun/git.go` — Git remote detection, push, branch tracking, and commit creation
+- `internal/postrun/github.go` — GitHub API operations (PR creation, CI status checking, log fetching)
 - `internal/postrun/workflow.go` — CI workflow detection
-- `internal/postrun/prompts/` — LLM prompt templates for PR generation
+- `internal/postrun/prompts/pr.md` — LLM prompt template for PR title/body generation
+- `internal/postrun/prompts/ci_fix.md` — LLM prompt template for CI failure diagnosis and fixing
+- `internal/postrun/prompts/prompts.go` — Template rendering for both PR and CI fix prompts
 - `internal/postrun/parse.go` — LLM output parsing for PR title/body
 
 ## Workflow
@@ -52,7 +54,47 @@ postrun.Run(ctx, postrun.Config{
    - Display status updates when check status changes (silent between polls)
    - Format status as individual checks (≤5) or grouped summary (>5)
    - On all checks passed: Display "CI passed — PR ready for review" (or "CI passed" for default branch)
-   - On any check failed: Return error with failed check names
+   - **On any check failed: Enter CI fix loop** (see below)
+
+## CI Fix Loop
+
+When a CI check fails, snap automatically attempts to fix it:
+
+### Fix Attempt Sequence (up to 10 times)
+
+1. **Fetch failure logs**:
+   - Call `FailedRunID()` to get the most recent failed workflow run ID via `gh run list --status failure`
+   - Call `FailureLogs(runID)` to fetch logs via `gh run view <id> --log-failed`
+   - Logs are truncated to 50KB to prevent LLM context overflow
+   - Logs are held in memory only — never written to disk (for secrets safety)
+
+2. **Diagnose and fix via LLM**:
+   - Render CI fix prompt with failure logs, failed check name, and attempt number
+   - Call `Executor.Run()` with `model.Fast` to invoke Claude
+   - LLM is instructed to diagnose root cause and apply minimal fix
+   - LLM is explicitly prohibited from modifying CI workflow files (`.github/workflows/`)
+
+3. **Commit and push fix**:
+   - Stage all changes via `git add -A`
+   - Create new commit with message `fix: resolve <check-name> CI failure` (never amend)
+   - Push fix via `git push origin HEAD` (never uses `--force`)
+
+4. **Re-poll CI**:
+   - Resume polling from step 5 of the main workflow
+   - If CI passes: Complete with "CI passed — PR ready for review"
+   - If CI fails again: Increment attempt counter and repeat (max 10 attempts)
+
+### Termination Conditions
+
+- **Success**: Any attempt where CI passes after fix
+- **Max retries exhausted**: After 10 failed fix attempts, display "CI still failing after 10 attempts" and return error
+- **Log fetch failure**: If `FailedRunID()` or `FailureLogs()` fails, return error with "Failed to read CI logs" message
+- **Commit/push failure**: If `CommitAll()` or `Push()` fails, return error and stop
+
+### Constants
+
+- `maxFixAttempts = 10` — Hard limit on fix attempts
+- `maxLogSize = 50 * 1024` — Log truncation threshold (50KB)
 
 ## Git Remote Detection
 
@@ -107,6 +149,20 @@ Returns diff statistics between the base branch and HEAD using `git diff <baseBr
 
 Used as input to the PR generation prompt to give the LLM context about what changed.
 
+## Commit All
+
+**Function**: `CommitAll(ctx context.Context, message string)` in `internal/postrun/git.go`
+
+Stages all changes and creates a new commit with the given message:
+
+- Runs `git add -A` to stage all changes
+- Runs `git commit -m "<message>"` to create a new commit
+- Never uses `--amend` flag (always creates a new commit)
+- Returns error with message "nothing to commit" if there are no staged changes
+- Returns error with git error details if the commit fails
+
+Used by the CI fix loop to commit fixes after the LLM has modified files.
+
 ## GitHub Operations
 
 **File**: `internal/postrun/github.go`
@@ -141,6 +197,24 @@ Retrieves CI check status using `gh pr checks` or `gh run list`.
 - **For default branch**: Uses `gh run list --branch <branch> --json name,status,conclusion --limit 1` to get the latest workflow run
 - Returns a slice of `CheckResult` structs with normalized statuses: "passed", "failed", "running", "pending"
 - Normalizes GitHub's various status values (SUCCESS, PENDING, FAILURE, etc.) to our standard statuses
+
+### FailedRunID
+
+Finds the ID of the most recent failed workflow run using `gh run list --status failure --limit 1 --json databaseId`.
+
+- Returns the workflow run ID as a string
+- Returns error with message "no failed runs found" if no failures exist
+- Used by the CI fix loop to locate which workflow run to fetch logs from
+
+### FailureLogs
+
+Fetches the failure logs from a workflow run using `gh run view <runID> --log-failed`.
+
+- Returns the full log content as a string
+- Truncates logs to 50KB (`maxLogSize`) to prevent LLM context window overflow
+- Appends `[log truncated — exceeded 50KB limit]` marker if truncation occurred
+- Logs are held in memory only — never written to disk (for secrets safety)
+- Used by the CI fix loop to provide failure context to the LLM
 
 ## CI Workflow Detection
 
@@ -184,6 +258,27 @@ The `parsePROutput()` function extracts title and body from LLM output:
 - First line becomes the title
 - Remaining text becomes the body
 - Returns error if output is empty or malformed
+
+## CI Fix Generation
+
+**File**: `internal/postrun/prompts/ci_fix.md` and `internal/postrun/prompts/prompts.go`
+
+The CI fix prompt template (`ci_fix.md`) instructs the LLM to:
+
+- Diagnose the root cause from CI failure logs
+- Apply the minimal code fix to make the failing check pass
+- Never modify CI workflow files (`.github/workflows/`)
+- Never add skip/ignore directives to bypass checks
+- Focus only on fixing the specific failing check
+
+The `CIFix()` function renders this template with:
+
+- `{{.FailureLogs}}` — Truncated CI failure logs (max 50KB)
+- `{{.CheckName}}` — Name of the failing check
+- `{{.AttemptNumber}}` — Current attempt number (1-based)
+- `{{.MaxAttempts}}` — Maximum attempts allowed (10)
+
+After LLM execution, the modified files are committed (new commit) and pushed (no force).
 
 ## Integration Points
 

@@ -3,6 +3,7 @@ package postrun
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/url"
 	"os/exec"
 	"strings"
@@ -93,6 +94,30 @@ func CurrentBranch(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+// CommitAll stages all changes and creates a new commit. Never amends.
+func CommitAll(ctx context.Context, message string) error {
+	addCmd := exec.CommandContext(ctx, "git", "add", "-A")
+	var addStderr bytes.Buffer
+	addCmd.Stderr = &addStderr
+	if err := addCmd.Run(); err != nil {
+		return fmt.Errorf("git add failed: %s", strings.TrimSpace(addStderr.String()))
+	}
+
+	commitCmd := exec.CommandContext(ctx, "git", "commit", "-m", message)
+	var commitStdout, commitStderr bytes.Buffer
+	commitCmd.Stdout = &commitStdout
+	commitCmd.Stderr = &commitStderr
+	if err := commitCmd.Run(); err != nil {
+		combined := strings.TrimSpace(commitStdout.String() + "\n" + commitStderr.String())
+		// "nothing to commit" is not a crash — return a descriptive error
+		if strings.Contains(combined, "nothing to commit") {
+			return fmt.Errorf("nothing to commit")
+		}
+		return fmt.Errorf("git commit failed: %s", combined)
+	}
+	return nil
 }
 
 // DiffStat returns the diff stat between the given base branch and HEAD.

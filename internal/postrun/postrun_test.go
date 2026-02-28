@@ -746,39 +746,494 @@ func TestRun_NoWorkflows(t *testing.T) {
 	assert.NotContains(t, output, "Waiting for CI checks...")
 }
 
-func TestRun_CI_Failed(t *testing.T) {
+// mockGHWithCIFix creates a gh mock that handles all commands needed for the fix loop.
+// checksResponses are returned in order for "pr checks" calls.
+// failedRunID is returned by "run list --status failure".
+// failedLogs is returned by "run view <id> --log-failed".
+//
+//nolint:unparam // defaultBranch is parameterized for readability even though tests use "main"
+func mockGHWithCIFix(t *testing.T, defaultBranch, prViewJSON, prCreateURL string, checksResponses []string, failedRunID, failedLogs string) {
+	t.Helper()
+	binDir := t.TempDir()
+	counterFile := filepath.Join(binDir, "counter")
+	require.NoError(t, os.WriteFile(counterFile, []byte("0"), 0o600))
+
+	var script strings.Builder
+	script.WriteString("#!/bin/sh\n")
+	script.WriteString("case \"$1 $2\" in\n")
+
+	// gh repo view
+	script.WriteString("  \"repo view\")\n")
+	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", defaultBranch))
+	script.WriteString("    ;;\n")
+
+	// gh pr view
+	script.WriteString("  \"pr view\")\n")
+	if prViewJSON == "" {
+		script.WriteString("    exit 1\n")
+	} else {
+		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prViewJSON))
+	}
+	script.WriteString("    ;;\n")
+
+	// gh pr create
+	script.WriteString("  \"pr create\")\n")
+	if prCreateURL == "" {
+		script.WriteString("    echo 'creation failed' >&2\n")
+		script.WriteString("    exit 1\n")
+	} else {
+		script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", prCreateURL))
+	}
+	script.WriteString("    ;;\n")
+
+	// gh pr checks — stateful
+	script.WriteString("  \"pr checks\")\n")
+	script.WriteString(fmt.Sprintf("    COUNT=$(cat %s)\n", counterFile))
+	script.WriteString("    COUNT=$((COUNT + 1))\n")
+	script.WriteString(fmt.Sprintf("    printf '%%s' \"$COUNT\" > %s\n", counterFile))
+	script.WriteString("    case $COUNT in\n")
+	for i, resp := range checksResponses {
+		script.WriteString(fmt.Sprintf("      %d)\n", i+1))
+		script.WriteString(fmt.Sprintf("        printf '%%s' '%s'\n", resp))
+		script.WriteString("        ;;\n")
+	}
+	script.WriteString("      *)\n")
+	if len(checksResponses) > 0 {
+		script.WriteString(fmt.Sprintf("        printf '%%s' '%s'\n", checksResponses[len(checksResponses)-1]))
+	}
+	script.WriteString("        ;;\n")
+	script.WriteString("    esac\n")
+	script.WriteString("    ;;\n")
+
+	// gh run list (for FailedRunID)
+	script.WriteString("  \"run list\")\n")
+	script.WriteString(fmt.Sprintf("    printf '%%s' '[{\"databaseId\":%s}]'\n", failedRunID))
+	script.WriteString("    ;;\n")
+
+	// gh run view (for FailureLogs)
+	script.WriteString("  \"run view\")\n")
+	script.WriteString(fmt.Sprintf("    printf '%%s' '%s'\n", failedLogs))
+	script.WriteString("    ;;\n")
+
+	script.WriteString("  *)\n")
+	script.WriteString("    echo \"unexpected gh call: $*\" >&2\n")
+	script.WriteString("    exit 99\n")
+	script.WriteString("    ;;\n")
+	script.WriteString("esac\n")
+
+	ghPath := filepath.Join(binDir, "gh")
+	require.NoError(t, os.WriteFile(ghPath, []byte(script.String()), 0o755)) //nolint:gosec // test script needs execute permission
+
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+origPath)
+}
+
+// fixLoopExecutor writes a file on each call (simulating LLM fix) so git has something to commit.
+type fixLoopExecutor struct {
+	dir      string
+	callNum  int
+	prOutput string // output for PR generation (first call)
+}
+
+func (m *fixLoopExecutor) Run(_ context.Context, w io.Writer, _ model.Type, args ...string) error {
+	m.callNum++
+	// Check if this is a PR prompt or a CI fix prompt
+	if len(args) > 0 && strings.Contains(args[0], "pull request") {
+		_, err := fmt.Fprint(w, m.prOutput)
+		return err
+	}
+	// CI fix call — create a file to simulate a fix
+	fileName := filepath.Join(m.dir, fmt.Sprintf("fix-%d.txt", m.callNum))
+	if err := os.WriteFile(fileName, []byte(fmt.Sprintf("fix %d", m.callNum)), 0o600); err != nil {
+		return err
+	}
+	return nil
+}
+
+func TestRun_CIFix_SuccessOnSecondAttempt(t *testing.T) {
 	dir := initGitRepo(t)
 	initBareRemote(t, dir)
 
 	// Create feature branch
-	gitCmd(t, dir, "checkout", "-b", "feature-ci-fail")
+	gitCmd(t, dir, "checkout", "-b", "feature-ci-fix")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("new feature"), 0o600))
 	gitCmd(t, dir, "add", ".")
 	gitCmd(t, dir, "commit", "-m", "add feature")
 
-	// Add workflow file
 	addWorkflowFile(t, dir)
 	gitCmd(t, dir, "add", ".")
 	gitCmd(t, dir, "commit", "-m", "add workflows")
 
 	chdir(t, dir)
 
-	mockGHWithCI(t, "main", "", "https://github.com/user/repo/pull/53",
-		`[{"name":"lint","state":"SUCCESS","conclusion":"success"},{"name":"test","state":"FAILURE","conclusion":"failure"}]`)
+	// First poll: lint fails. Second poll (after fix): all pass.
+	mockGHWithCIFix(t, "main", "", "https://github.com/user/repo/pull/60",
+		[]string{
+			`[{"name":"lint","state":"FAILURE","conclusion":"failure"},{"name":"test","state":"SUCCESS","conclusion":"success"}]`,
+			`[{"name":"lint","state":"SUCCESS","conclusion":"success"},{"name":"test","state":"SUCCESS","conclusion":"success"}]`,
+		},
+		"12345", "Error: unused variable on line 10",
+	)
+
+	executor := &fixLoopExecutor{dir: dir, prOutput: "Fix lint\n\nFixed the lint issue."}
 
 	var buf bytes.Buffer
 	cfg := Config{
 		Output:       &buf,
 		RemoteURL:    "https://github.com/user/repo.git",
 		IsGitHub:     true,
-		Executor:     &mockExecutor{output: "Add feature\n\nBody."},
+		Executor:     executor,
+		RepoRoot:     dir,
+		PollInterval: time.Millisecond,
+	}
+
+	err := Run(context.Background(), cfg)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.Contains(t, output, "CI failed — lint (attempt 1/10)")
+	assert.Contains(t, output, "Fix pushed, waiting for CI...")
+	assert.Contains(t, output, "CI passed — PR ready for review")
+
+	// Verify a fix commit exists
+	logOutput := gitOutput(t, dir, "log", "--oneline")
+	assert.Contains(t, logOutput, "fix: resolve lint CI failure")
+}
+
+func TestRun_CIFix_MaxRetriesExhausted(t *testing.T) {
+	dir := initGitRepo(t)
+	initBareRemote(t, dir)
+
+	gitCmd(t, dir, "checkout", "-b", "feature-ci-max")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("new feature"), 0o600))
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add feature")
+
+	addWorkflowFile(t, dir)
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add workflows")
+
+	chdir(t, dir)
+
+	// Always return failure
+	alwaysFailing := `[{"name":"lint","state":"FAILURE","conclusion":"failure"}]`
+	responses := make([]string, 11) // 11 responses (initial + 10 retries)
+	for i := range responses {
+		responses[i] = alwaysFailing
+	}
+
+	mockGHWithCIFix(t, "main", "", "https://github.com/user/repo/pull/61",
+		responses, "12345", "Error: persistent issue",
+	)
+
+	executor := &fixLoopExecutor{dir: dir, prOutput: "Fix\n\nBody."}
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:       &buf,
+		RemoteURL:    "https://github.com/user/repo.git",
+		IsGitHub:     true,
+		Executor:     executor,
 		RepoRoot:     dir,
 		PollInterval: time.Millisecond,
 	}
 
 	err := Run(context.Background(), cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CI failed")
+	assert.Contains(t, err.Error(), "CI still failing after 10 attempts")
+
+	output := buf.String()
+	assert.Contains(t, output, "CI still failing after 10 attempts")
+
+	// Verify 10 fix commits exist
+	logOutput := gitOutput(t, dir, "log", "--oneline")
+	assert.Equal(t, 10, strings.Count(logOutput, "fix: resolve"))
+}
+
+func TestRun_CIFix_MultipleFailing(t *testing.T) {
+	dir := initGitRepo(t)
+	initBareRemote(t, dir)
+
+	gitCmd(t, dir, "checkout", "-b", "feature-ci-multi")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("new feature"), 0o600))
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add feature")
+
+	addWorkflowFile(t, dir)
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add workflows")
+
+	chdir(t, dir)
+
+	// Multiple checks failing, then all pass
+	mockGHWithCIFix(t, "main", "", "https://github.com/user/repo/pull/62",
+		[]string{
+			`[{"name":"lint","state":"FAILURE","conclusion":"failure"},{"name":"test","state":"FAILURE","conclusion":"failure"}]`,
+			`[{"name":"lint","state":"SUCCESS","conclusion":"success"},{"name":"test","state":"SUCCESS","conclusion":"success"}]`,
+		},
+		"12345", "Multiple errors",
+	)
+
+	executor := &fixLoopExecutor{dir: dir, prOutput: "Fix\n\nBody."}
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:       &buf,
+		RemoteURL:    "https://github.com/user/repo.git",
+		IsGitHub:     true,
+		Executor:     executor,
+		RepoRoot:     dir,
+		PollInterval: time.Millisecond,
+	}
+
+	err := Run(context.Background(), cfg)
+	require.NoError(t, err)
+
+	output := buf.String()
+	// Should target the first failure (lint)
+	assert.Contains(t, output, "CI failed — lint (attempt 1/10)")
+	assert.Contains(t, output, "CI passed — PR ready for review")
+}
+
+func TestRun_CIFix_LogFetchFailed(t *testing.T) {
+	dir := initGitRepo(t)
+	initBareRemote(t, dir)
+
+	gitCmd(t, dir, "checkout", "-b", "feature-ci-logfail")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("new feature"), 0o600))
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add feature")
+
+	addWorkflowFile(t, dir)
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add workflows")
+
+	chdir(t, dir)
+
+	// Mock where run view fails
+	binDir := t.TempDir()
+	counterFile := filepath.Join(binDir, "counter")
+	require.NoError(t, os.WriteFile(counterFile, []byte("0"), 0o600))
+
+	script := fmt.Sprintf(`#!/bin/sh
+case "$1 $2" in
+  "repo view")
+    printf '%%s' 'main'
+    ;;
+  "pr view")
+    exit 1
+    ;;
+  "pr create")
+    printf '%%s' 'https://github.com/user/repo/pull/63'
+    ;;
+  "pr checks")
+    printf '%%s' '[{"name":"lint","state":"FAILURE","conclusion":"failure"}]'
+    ;;
+  "run list")
+    printf '%%s' '[{"databaseId":12345}]'
+    ;;
+  "run view")
+    echo 'failed to fetch logs' >&2
+    exit 1
+    ;;
+  *)
+    echo "unexpected gh call: $*" >&2
+    exit 99
+    ;;
+esac
+`)
+	ghPath := filepath.Join(binDir, "gh")
+	require.NoError(t, os.WriteFile(ghPath, []byte(script), 0o755)) //nolint:gosec // test script
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+origPath)
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:       &buf,
+		RemoteURL:    "https://github.com/user/repo.git",
+		IsGitHub:     true,
+		Executor:     &mockExecutor{output: "Fix\n\nBody."},
+		RepoRoot:     dir,
+		PollInterval: time.Millisecond,
+	}
+
+	err := Run(context.Background(), cfg)
+	require.Error(t, err)
+	assert.Contains(t, buf.String(), "Failed to read CI logs")
+}
+
+func TestRun_CIFix_PushAfterFixFailed(t *testing.T) {
+	dir := initGitRepo(t)
+	initBareRemote(t, dir)
+
+	gitCmd(t, dir, "checkout", "-b", "feature-ci-pushfail")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("new feature"), 0o600))
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add feature")
+
+	addWorkflowFile(t, dir)
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add workflows")
+
+	chdir(t, dir)
+
+	// CI fails, fix succeeds, but then we remove the remote to make push fail
+	mockGHWithCIFix(t, "main", "", "https://github.com/user/repo/pull/64",
+		[]string{
+			`[{"name":"lint","state":"FAILURE","conclusion":"failure"}]`,
+		},
+		"12345", "Error: lint issue",
+	)
+
+	// Use an executor that removes the remote after creating the fix file
+	executor := &pushFailExecutor{dir: dir, prOutput: "Fix\n\nBody."}
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:       &buf,
+		RemoteURL:    "https://github.com/user/repo.git",
+		IsGitHub:     true,
+		Executor:     executor,
+		RepoRoot:     dir,
+		PollInterval: time.Millisecond,
+	}
+
+	err := Run(context.Background(), cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to push CI fix")
+}
+
+// pushFailExecutor creates a fix file and then sabotages the git remote.
+type pushFailExecutor struct {
+	dir      string
+	callNum  int
+	prOutput string
+}
+
+func (m *pushFailExecutor) Run(ctx context.Context, w io.Writer, _ model.Type, args ...string) error {
+	m.callNum++
+	if len(args) > 0 && strings.Contains(args[0], "pull request") {
+		_, err := fmt.Fprint(w, m.prOutput)
+		return err
+	}
+	// Create a fix file
+	fileName := filepath.Join(m.dir, fmt.Sprintf("fix-%d.txt", m.callNum))
+	if err := os.WriteFile(fileName, []byte("fix"), 0o600); err != nil {
+		return err
+	}
+	// Sabotage the remote so push fails
+	cmd := exec.CommandContext(ctx, "git", "remote", "set-url", "origin", "/nonexistent/path")
+	cmd.Dir = m.dir
+	_ = cmd.Run() //nolint:errcheck // best-effort sabotage for test
+	return nil
+}
+
+func TestRun_CIFix_ContextCancelled(t *testing.T) {
+	dir := t.TempDir()
+	addWorkflowFile(t, dir)
+
+	// Mock gh: CI fails, run list/view work, but context gets cancelled during fix
+	binDir := t.TempDir()
+	script := `#!/bin/sh
+case "$1 $2" in
+  "pr checks")
+    printf '%s' '[{"name":"lint","state":"FAILURE","conclusion":"failure"}]'
+    ;;
+  "run list")
+    printf '%s' '[{"databaseId":12345}]'
+    ;;
+  "run view")
+    sleep 10
+    ;;
+  *)
+    echo "unexpected gh call: $*" >&2
+    exit 99
+    ;;
+esac
+`
+	ghPath := filepath.Join(binDir, "gh")
+	require.NoError(t, os.WriteFile(ghPath, []byte(script), 0o755)) //nolint:gosec // test script
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+origPath)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:       &buf,
+		Executor:     &mockExecutor{output: "fix"},
+		RepoRoot:     dir,
+		PollInterval: time.Millisecond,
+	}
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	err := monitorCI(ctx, cfg, true, "main")
+	// Context cancellation during fix should not panic
+	// It may return an error from the gh command being killed, which is acceptable
+	_ = err
+}
+
+func TestRun_CIFix_LogsNotWrittenToDisk(t *testing.T) {
+	dir := initGitRepo(t)
+	initBareRemote(t, dir)
+
+	gitCmd(t, dir, "checkout", "-b", "feature-ci-nologs")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("new feature"), 0o600))
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add feature")
+
+	addWorkflowFile(t, dir)
+	gitCmd(t, dir, "add", ".")
+	gitCmd(t, dir, "commit", "-m", "add workflows")
+
+	chdir(t, dir)
+
+	// Use a distinctive sentinel in the log content that we can search for on disk
+	const sentinel = "UNIQUE_LOG_SENTINEL_AC7_VERIFICATION_12345"
+
+	mockGHWithCIFix(t, "main", "", "https://github.com/user/repo/pull/70",
+		[]string{
+			`[{"name":"lint","state":"FAILURE","conclusion":"failure"}]`,
+			`[{"name":"lint","state":"SUCCESS","conclusion":"success"}]`,
+		},
+		"12345", sentinel,
+	)
+
+	executor := &fixLoopExecutor{dir: dir, prOutput: "Fix\n\nBody."}
+
+	var buf bytes.Buffer
+	cfg := Config{
+		Output:       &buf,
+		RemoteURL:    "https://github.com/user/repo.git",
+		IsGitHub:     true,
+		Executor:     executor,
+		RepoRoot:     dir,
+		PollInterval: time.Millisecond,
+	}
+
+	err := Run(context.Background(), cfg)
+	require.NoError(t, err)
+
+	// Walk the repo directory and verify no file contains the log sentinel.
+	// CI failure logs must only be held in memory.
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil || info.IsDir() {
+			return walkErr
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		if strings.Contains(string(data), sentinel) {
+			t.Errorf("CI failure log content found on disk at %s", path)
+		}
+		return nil
+	})
+	require.NoError(t, err)
 }
 
 func TestRun_CI_ContextCancelled(t *testing.T) {

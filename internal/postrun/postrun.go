@@ -40,7 +40,10 @@ type Config struct {
 	PollInterval time.Duration // CI poll interval (defaults to 15s)
 }
 
-const defaultPollInterval = 15 * time.Second
+const (
+	defaultPollInterval = 15 * time.Second
+	maxFixAttempts      = 10
+)
 
 // Run executes the post-run step: push to remote, create PR if on GitHub, monitor CI.
 func Run(ctx context.Context, cfg Config) error {
@@ -168,6 +171,7 @@ func generatePR(ctx context.Context, cfg Config, defaultBranch string) (title, b
 }
 
 // monitorCI detects relevant CI workflows and polls check status until completion.
+// On CI failure, it enters a fix loop: fetch logs, LLM fix, commit, push, re-poll.
 func monitorCI(ctx context.Context, cfg Config, hasPR bool, branch string) error {
 	repoRoot := cfg.RepoRoot
 	if repoRoot == "" {
@@ -190,16 +194,16 @@ func monitorCI(ctx context.Context, cfg Config, hasPR bool, branch string) error
 		pollInterval = defaultPollInterval
 	}
 
+	attempt := 0
 	var prev []CheckResult
+
 	for {
-		// Check context before polling — cancelled context kills exec subprocesses.
 		if ctx.Err() != nil {
 			return nil //nolint:nilerr // context cancellation is a clean exit, not an error
 		}
 
 		checks, err := CheckStatus(ctx, hasPR, branch)
 		if err != nil {
-			// Context cancellation during gh exec — exit cleanly
 			if ctx.Err() != nil {
 				return nil //nolint:nilerr // context cancellation is a clean exit, not an error
 			}
@@ -213,8 +217,30 @@ func monitorCI(ctx context.Context, cfg Config, hasPR bool, branch string) error
 
 		if len(checks) > 0 && allCompleted(checks) {
 			if anyFailed(checks) {
-				return fmt.Errorf("CI failed: %s", failedCheckNames(checks))
+				attempt++
+				if attempt > maxFixAttempts {
+					fmt.Fprint(cfg.Output, ui.Error(fmt.Sprintf("CI still failing after %d attempts", maxFixAttempts)))
+					return fmt.Errorf("CI still failing after %d attempts: %s", maxFixAttempts, failedCheckNames(checks))
+				}
+
+				checkName := firstFailedName(checks)
+				if err := fixCI(ctx, cfg, checkName, attempt); err != nil {
+					return err
+				}
+
+				// Reset prev so we re-print status on next poll
+				prev = nil
+				fmt.Fprint(cfg.Output, ui.Step("Waiting for CI checks..."))
+
+				// Wait before polling again to give CI time to pick up the new push
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(pollInterval):
+				}
+				continue
 			}
+
 			if hasPR {
 				fmt.Fprint(cfg.Output, ui.Complete("CI passed — PR ready for review"))
 			} else {
@@ -229,6 +255,68 @@ func monitorCI(ctx context.Context, cfg Config, hasPR bool, branch string) error
 		case <-time.After(pollInterval):
 		}
 	}
+}
+
+// fixCI performs a single CI fix attempt: fetch logs, call LLM, commit, push.
+func fixCI(ctx context.Context, cfg Config, checkName string, attempt int) error {
+	fmt.Fprint(cfg.Output, ui.Info(fmt.Sprintf("CI failed — %s (attempt %d/%d)", checkName, attempt, maxFixAttempts)))
+
+	// Fetch failed run ID
+	runID, err := FailedRunID(ctx)
+	if err != nil {
+		fmt.Fprint(cfg.Output, ui.Error(fmt.Sprintf("Failed to read CI logs: %s", err)))
+		return fmt.Errorf("failed to get failed run ID: %w", err)
+	}
+
+	// Fetch failure logs (in-memory only, never written to disk)
+	logs, err := FailureLogs(ctx, runID)
+	if err != nil {
+		fmt.Fprint(cfg.Output, ui.Error(fmt.Sprintf("Failed to read CI logs: %s", err)))
+		return fmt.Errorf("failed to fetch CI logs: %w", err)
+	}
+
+	// Render CI fix prompt
+	prompt, err := prompts.CIFix(prompts.CIFixData{
+		FailureLogs:   logs,
+		CheckName:     checkName,
+		AttemptNumber: attempt,
+		MaxAttempts:   maxFixAttempts,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to render CI fix prompt: %w", err)
+	}
+
+	// Call LLM to diagnose and fix
+	if cfg.Executor == nil {
+		return fmt.Errorf("no executor configured for CI fix")
+	}
+	if err := cfg.Executor.Run(ctx, cfg.Output, model.Fast, prompt); err != nil {
+		return fmt.Errorf("CI fix LLM call failed: %w", err)
+	}
+
+	// Commit the fix (new commit, never amend)
+	commitMsg := fmt.Sprintf("fix: resolve %s CI failure", checkName)
+	if err := CommitAll(ctx, commitMsg); err != nil {
+		return fmt.Errorf("failed to commit CI fix: %w", err)
+	}
+
+	// Push the fix
+	if err := Push(ctx); err != nil {
+		return fmt.Errorf("failed to push CI fix: %w", err)
+	}
+
+	fmt.Fprint(cfg.Output, ui.Step("Fix pushed, waiting for CI..."))
+	return nil
+}
+
+// firstFailedName returns the name of the first failed check.
+func firstFailedName(checks []CheckResult) string {
+	for _, c := range checks {
+		if c.Status == "failed" {
+			return c.Name
+		}
+	}
+	return "unknown"
 }
 
 // failedCheckNames returns a comma-separated list of failed check names.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -166,6 +167,55 @@ func normalizeRunStatus(status, conclusion string) string {
 	}
 }
 
+const maxLogSize = 50 * 1024 // 50KB
+
+// FailureLogs fetches the failed run logs via gh run view --log-failed.
+// Truncates output to maxLogSize (50KB) to prevent context window overflow.
+func FailureLogs(ctx context.Context, runID string) (string, error) {
+	cmd := exec.CommandContext(ctx, "gh", "run", "view", runID, "--log-failed")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", &GHError{Stderr: strings.TrimSpace(stderr.String()), Err: err}
+	}
+	return truncateLog(stdout.String()), nil
+}
+
+// truncateLog truncates log content to maxLogSize, appending a marker if truncated.
+func truncateLog(content string) string {
+	if len(content) <= maxLogSize {
+		return content
+	}
+	return content[:maxLogSize] + "\n\n[log truncated — exceeded 50KB limit]"
+}
+
+// failedRunResult represents a single run from gh run list --json.
+type failedRunResult struct {
+	DatabaseID int `json:"databaseId"` //nolint:tagliatelle // GitHub API uses camelCase
+}
+
+// FailedRunID finds the ID of the most recent failed workflow run.
+func FailedRunID(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "gh", "run", "list", "--status", "failure", "--limit", "1", "--json", "databaseId")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", &GHError{Stderr: strings.TrimSpace(stderr.String()), Err: err}
+	}
+
+	var results []failedRunResult
+	if err := json.Unmarshal(stdout.Bytes(), &results); err != nil {
+		return "", err
+	}
+	if len(results) == 0 {
+		return "", &GHError{Stderr: "no failed runs found", Err: nil}
+	}
+
+	return fmt.Sprintf("%d", results[0].DatabaseID), nil
+}
+
 // GHError wraps a gh CLI failure with stderr output.
 type GHError struct {
 	Stderr string
@@ -176,7 +226,10 @@ func (e *GHError) Error() string {
 	if e.Stderr != "" {
 		return e.Stderr
 	}
-	return e.Err.Error()
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return "unknown gh error"
 }
 
 func (e *GHError) Unwrap() error {
