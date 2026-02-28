@@ -1,6 +1,6 @@
 # Infrastructure: Post-run Operations
 
-Post-run operations execute after all tasks are completed. These steps automate git push and prepare for future GitHub PR and CI features.
+Post-run operations execute after all tasks are completed. These steps automate git push and GitHub PR creation.
 
 ## Post-run Module
 
@@ -8,6 +8,9 @@ Post-run operations execute after all tasks are completed. These steps automate 
 
 - `internal/postrun/postrun.go` — Post-run orchestration
 - `internal/postrun/git.go` — Git remote detection, push, and branch tracking
+- `internal/postrun/github.go` — GitHub API operations (PR creation)
+- `internal/postrun/prompts/` — LLM prompt templates for PR generation
+- `internal/postrun/parse.go` — LLM output parsing for PR title/body
 
 ## Workflow
 
@@ -16,10 +19,11 @@ After all tasks complete, the workflow runner calls `postrun.Run()` with:
 ```go
 postrun.Run(ctx, postrun.Config{
     Output:    output,
+    Executor:  executor,       // LLM executor for PR generation
     RemoteURL: remoteURL,      // Pre-detected remote URL (empty = no remote)
     IsGitHub:  isGitHub,       // Pre-detected GitHub flag
-    PRDPath:   prdPath,        // For future PR body context (TASK2)
-    TasksDir:  tasksDir,       // For future PR body context (TASK2)
+    PRDPath:   prdPath,        // PRD.md path for PR body context
+    TasksDir:  tasksDir,       // Tasks directory
 })
 ```
 
@@ -31,7 +35,13 @@ postrun.Run(ctx, postrun.Config{
    - On success, displays completion with branch name and timing
    - On failure, returns error (workflow stops with error message)
 3. **Check for GitHub** — If non-GitHub remote, skip GitHub-specific features and exit
-4. **Future GitHub features** — PR creation and CI monitoring (planned in TASK2)
+4. **PR creation flow** (GitHub remotes only):
+   - Get default branch via `gh repo view`
+   - Skip PR creation if on default branch
+   - Check if PR already exists via `gh pr view` (skip if exists)
+   - Generate PR title and body via LLM (using PRD context)
+   - Create PR via `gh pr create`
+   - Display PR URL and number
 
 ## Git Remote Detection
 
@@ -74,7 +84,69 @@ Pushes the current branch to `origin` using `git push origin HEAD`:
 
 Returns the name of the current branch using `git branch --show-current`.
 
-Used in completion messages to show which branch was pushed.
+Returns empty string for detached HEAD state.
+
+Used in completion messages to show which branch was pushed, and to determine if PR creation should proceed.
+
+## Diff Stat
+
+**Function**: `DiffStat(ctx context.Context, baseBranch string)` in `internal/postrun/git.go`
+
+Returns diff statistics between the base branch and HEAD using `git diff <baseBranch>...HEAD --stat`.
+
+Used as input to the PR generation prompt to give the LLM context about what changed.
+
+## GitHub Operations
+
+**File**: `internal/postrun/github.go`
+
+### DefaultBranch
+
+Retrieves the repository's default branch using `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`.
+
+Used to determine if the current branch is the default branch (in which case PR creation is skipped).
+
+### PRExists
+
+Checks if a PR already exists for the current branch using `gh pr view --json state,url`.
+
+- Returns `(true, url, nil)` if a PR exists
+- Returns `(false, "", nil)` if no PR exists (exit code 1 is not treated as an error)
+- Returns error only for actual gh failures
+
+Used for PR deduplication — prevents creating duplicate PRs.
+
+### CreatePR
+
+Creates a new pull request using `gh pr create --title "..." --body "..."`.
+
+Returns the PR URL. Returns error if creation fails.
+
+## PR Generation
+
+**File**: `internal/postrun/prompts/pr.md` and `internal/postrun/prompts/prompts.go`
+
+The PR prompt template (`pr.md`) instructs the LLM to:
+
+- Generate a title under 72 characters describing the change
+- Generate a body explaining *why* the changes were made using the PRD for context
+- Output only the PR content (no preamble)
+
+The `PR()` function renders this template with:
+
+- `{{.PRDContent}}` — Full PRD.md text for context
+- `{{.DiffStat}}` — Diff statistics from git
+
+### Output Parsing
+
+**File**: `internal/postrun/parse.go`
+
+The `parsePROutput()` function extracts title and body from LLM output:
+
+- Splits on first blank line (double newline)
+- First line becomes the title
+- Remaining text becomes the body
+- Returns error if output is empty or malformed
 
 ## Integration Points
 
@@ -98,12 +170,17 @@ Post-run behavior is automatic and requires no user configuration:
 - If non-GitHub remote: Push succeeds, GitHub features skipped
 - If GitHub remote: Push succeeds, gh CLI pre-validated during startup
 
-## Future Extensions (TASK2+)
+## Future Extensions (TASK3+)
 
-Current implementation handles git push only. Future tasks will add:
+Current implementation includes:
 
-- PR creation via `gh pr create`
-- CI status monitoring
-- Auto-merge handling (if configured)
+- ✅ Git push to remote
+- ✅ GitHub PR creation with LLM-generated title and body (TASK2)
 
-PRDPath and TasksDir are passed to `postrun.Run()` for future PR body context generation.
+Future tasks will add:
+
+- CI status monitoring and polling (TASK3)
+- CI failure log reading and LLM-driven fix attempts (TASK4)
+- Auto-merge handling (post-TASK4)
+
+The PRD context is passed to the PR generation prompt to create meaningful PR descriptions that explain the *why* behind changes, not just raw diff summaries.

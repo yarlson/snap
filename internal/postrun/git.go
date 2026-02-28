@@ -84,10 +84,23 @@ func (e *PushError) Unwrap() error {
 }
 
 // CurrentBranch returns the name of the current branch.
+// Returns empty string for detached HEAD.
 func CurrentBranch(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "branch", "--show-current")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+// DiffStat returns the diff stat between the given base branch and HEAD.
+func DiffStat(ctx context.Context, baseBranch string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "diff", baseBranch+"...HEAD", "--stat") //nolint:gosec // baseBranch comes from gh CLI output, not user input
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		return "", err
 	}

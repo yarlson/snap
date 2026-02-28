@@ -51,6 +51,7 @@ type StateManager interface {
 
 // Runner orchestrates the task implementation workflow.
 type Runner struct {
+	executor     Executor
 	stepRunner   *StepRunner
 	config       Config
 	stateManager StateManager
@@ -65,6 +66,7 @@ type Runner struct {
 // Enable snapshots with WithSnapshotter() when snapshots are desired.
 func NewRunner(executor Executor, config Config, opts ...RunnerOption) *Runner {
 	r := &Runner{
+		executor:     executor,
 		config:       config,
 		stateManager: state.NewManager(),
 		snapshotter:  nil,
@@ -289,6 +291,7 @@ func (r *Runner) selectIdleTask(ctx context.Context, workflowState *state.State)
 		// Run post-completion step (push, PR, CI).
 		if err := postrun.Run(ctx, postrun.Config{
 			Output:    r.output,
+			Executor:  r.executor,
 			RemoteURL: r.config.RemoteURL,
 			IsGitHub:  r.config.IsGitHub,
 			PRDPath:   r.config.PRDPath,

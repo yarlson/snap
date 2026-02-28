@@ -88,15 +88,26 @@ Steps 1, 2, and 4 use a thinking model (Opus) for deep analysis. The rest use a 
 
 After each task, snap updates `docs/context/` — a project knowledge base it maintains itself. Architecture decisions, conventions, terminology, and domain knowledge accumulate as tasks complete. Task 10 understands the codebase as well as task 1 built it.
 
-## Auto-push to git
+## Auto-push and PR creation
 
 When all tasks are complete, snap automatically pushes commits to your configured git remote (`origin`):
 
 - **No remote configured**: Pushes are skipped, workflow completes cleanly
 - **Non-GitHub remote**: Commits are pushed; PR and CI features are skipped
-- **GitHub remote**: Commits are pushed (requires `gh` CLI in PATH for pre-flight validation)
+- **GitHub remote**: Commits are pushed, then snap creates a PR with an LLM-generated title and description
 
 If push fails (e.g., rejected by remote), the error is displayed and the workflow stops.
+
+### GitHub PR Creation
+
+On GitHub remotes, after pushing:
+
+1. snap skips PR creation if you're on the default branch (e.g., `main`)
+2. snap skips PR creation if a PR already exists for this branch
+3. snap uses Claude to generate a concise PR title (< 72 chars) and body that explains *why* the changes were made, using your PRD as context
+4. snap creates the PR via `gh` CLI and displays the URL
+
+Requires `gh` CLI in PATH — pre-validated during startup if you're on a GitHub remote.
 
 ## Steering while it runs
 
