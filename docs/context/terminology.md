@@ -52,6 +52,12 @@
 
 **Plan marker** — Hidden file `.plan-started` created in session directory when plan command starts, used for session status tracking to distinguish planning-in-progress from completed planning.
 
+**Planning Artifacts** — Generated planning documents stored in a session's tasks directory: TASK*.md (task files), PRD.md (product requirements), TECHNOLOGY.md (technology decisions), DESIGN.md (design specifications). Detected by `HasArtifacts()` function to prevent accidental overwriting.
+
+**Artifact Conflict** — Occurs when `snap plan` is run on a session that already contains planning artifacts. Prevents accidental overwriting of existing planning documents. In TTY mode, prompts user to confirm cleanup and re-planning. In non-TTY mode, returns error with cleanup instructions.
+
+**Conflict Guard** — Safety mechanism in `snap plan` that detects existing planning artifacts before starting or resuming planning. Implemented via `checkPlanConflict()` function. Handles TTY vs. non-TTY scenarios differently to prevent automated environments from silently overwriting artifacts.
+
 **Raw mode** — Terminal mode where input is not line-buffered; each keystroke is immediately available to the application. Implemented via `termios` on Unix. Allows interactive features like single-key response to Ctrl+C and immediate escape sequence handling.
 
 **Interactive input** — User input from a TTY terminal in raw mode, character-by-character via `input.ReadLine()`. Supports Ctrl+C (abort), Backspace/Ctrl+U/Ctrl+W (editing), and proper escape sequence consumption (arrow keys, Home, End).

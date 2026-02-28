@@ -18,7 +18,7 @@ Session management enables creation and organization of named project workspaces
 - `cmd/status.go` — Status session subcommand (show session progress and task state)
 - `cmd/status_test.go` — Status command tests
 - `cmd/new_test.go` — Comprehensive E2E and integration tests for session commands
-- `internal/session/session.go` — Session management logic (create, validate, delete, list, status, plan history tracking)
+- `internal/session/session.go` — Session management logic (create, validate, delete, list, status, plan history tracking, artifact detection, artifact cleanup)
 - `internal/session/session_test.go` — Session unit tests
 
 ### Session Directory Structure
@@ -319,6 +319,8 @@ snap run my-project
 - Tests for `HasPlanHistory()` — Plan marker detection
 - Tests for `MarkPlanStarted()` — Marker file creation
 - Tests for `Exists()` — Session existence checking
+- Tests for `HasArtifacts()` — Planning artifact detection (TASK*.md, PRD.md, TECHNOLOGY.md, DESIGN.md)
+- Tests for `CleanSession()` — Complete session cleanup (tasks directory and state files)
 
 **Integration tests**:
 
