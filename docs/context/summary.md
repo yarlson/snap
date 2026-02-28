@@ -1,0 +1,82 @@
+# snap — Project Summary
+
+## What
+
+**snap** is an autonomous CLI tool for feature implementation from requirements to production. It discovers and implements individual task files with full TDD workflow, validates changes, performs code review, and commits results — all unattended in a continuous loop.
+
+## Architecture
+
+```
+snap CLI Entry Point (main.go)
+  ↓
+Workflow Runner (orchestrates 10-step iteration workflow)
+  ├─ Step Runner (executes individual workflow steps)
+  ├─ Prompt Queue (manages LLM call sequencing)
+  ├─ State Manager (tracks progress, resumable)
+  ├─ Model Layer (Task, Result definitions)
+  └─ Output Formatting (UI package)
+      ├─ Format functions (text styling, progress)
+      ├─ Color & style codes (terminal styling)
+      └─ Duration formatting (task timing display)
+```
+
+## Core Flow
+
+1. **Load State** — Resume from prior progress or start fresh
+2. **Select Task** — Discover and pick next incomplete task from task files
+3. **Run Iteration** (10 steps per task):
+   - Implement feature (LLM)
+   - Check completeness
+   - Validate (lint, test)
+   - Code review (LLM review + feedback)
+   - Fix issues if needed
+   - Re-validate fixes
+   - Update user-facing docs
+   - Commit implementation
+   - Update context docs
+   - Commit context
+4. **Loop** — Repeat until all tasks done or interrupted
+5. **Save State** — State persists after every step for resumability
+
+## System State
+
+- **Task files**: Stored in `docs/tasks/` (legacy) or `.snap/sessions/<name>/tasks/` (session-scoped); naming: TASK1.md, TASK2.md, etc. (case-sensitive, uppercase required)
+- **Task discovery**: Scanner finds and orders valid task files; detects case mismatches and PRD-embedded headers; PRD.md is optional overview document
+- **Sessions**: Named project workspaces, each with isolated tasks directory and independent state; auto-detection uses exactly-one-session heuristic
+- **Session state**: Saved to `.snap/sessions/<name>/state.json` for named sessions or `.snap/state.json` for legacy layout (tracks completed tasks, current task, step progress)
+- **Run command**: Supports `snap run [session]` with three modes: named session, auto-detection (single session), legacy fallback (docs/tasks/)
+- **Context**: `docs/context/` stores project context for future runs
+- **Terminal output**: Uses ANSI colors, styled headers, progress indicators, task durations, diagnostic hints
+
+## Capabilities
+
+- **TDD workflow**: Write tests, implement, validate, review
+- **Planning workflow**: `snap plan [session]` generates structured planning documents (PRD, TECHNOLOGY, DESIGN, TASK files) through two-phase pipeline (interactive requirements gathering with raw-mode terminal input for TTY or buffered input for pipes, then autonomous document generation)
+- **Session management**: `snap new <name>` creates named workspaces; `snap list` displays all sessions with task counts and status; `snap delete <name>` removes sessions (with confirmation or --force flag); `snap status [session]` shows detailed progress with task state and current step; each session has isolated tasks directory and state at `.snap/sessions/<name>/`
+- **Plan command**: `snap plan [session]` with two-phase pipeline: Phase 1 interactive requirements gathering (raw-mode input on TTY, buffered input on pipes), Phase 2 autonomous document generation (PRD, TECHNOLOGY, DESIGN, TASK files); supports `--from <file>` to skip Phase 1; session auto-detection for single-session projects; Ctrl+C in Phase 1 aborts planning gracefully
+- **Run command**: `snap run [session]` with three modes: explicit session, auto-detect (single session), legacy fallback (docs/tasks/); supports `--fresh` flag for state reset
+- **Multi-provider support**: Claude (default) or Codex via env var
+- **Provider validation**: Pre-flight check ensures provider CLI is available in PATH before execution
+- **Task discovery diagnostics**: Detects case-mismatched filenames (task1.md vs TASK1.md) and PRD-embedded task headers, provides corrective hints
+- **Resumable execution**: Survives interruption, resumes exactly where left off; state persists independently per session
+- **Startup summary**: Displays workflow state (session name or tasks directory, provider, task counts, action) on startup
+- **Prompt hint**: Interactive reminder on fresh starts (TTY-only) that user can type directives between steps
+- **Automated code review**: Built-in review step with feedback loop
+- **Task duration tracking**: Shows elapsed time for each completed task
+- **Persistent context**: `docs/context/` accessible to every task implementation
+- **Snapshot capture**: Optional git stash snapshots after each workflow step for debugging and recovery
+- **Task summaries**: Auto-generates one-line task descriptions during iteration setup for better context
+- **Version flag**: `--version` displays snap version (set at build time via ldflags)
+- **State inspection**: `--show-state` displays workflow progress in human-readable format; `--show-state --json` outputs raw state JSON; works with sessions
+- **Color output control**: NO_COLOR environment variable support (follows https://no-color.org/ standard); automatic color disabling in non-TTY contexts
+- **CI/CD integration**: GitHub Actions workflow validates lint and race conditions on every push and PR
+- **Release automation**: Automated binary builds and GitHub Releases via GoReleaser (linux/darwin, amd64/arm64); triggered on version tag push; workflow enforces lint and test before release
+
+## Tech Stack
+
+- **Language**: Go 1.25.6
+- **CLI Framework**: Cobra
+- **Testing**: testify (assert/mock)
+- **Markdown rendering**: charmbracelet/glamour
+- **Styling**: charmbracelet/lipgloss (ANSI colors/styles)
+- **Terminal I/O**: golang.org/x/term

@@ -628,7 +628,7 @@ func TestRunner_EmbeddedPrompts(t *testing.T) {
 	// Step 1: Implement — contains PRD path, task reference, and quality guardrails
 	assert.Contains(t, capturedPrompts[1], prdPath)
 	assert.Contains(t, capturedPrompts[1], "TASK1")
-	assert.Contains(t, capturedPrompts[1], "memory-map.md")
+	assert.Contains(t, capturedPrompts[1], "context-map.md")
 	assert.Contains(t, capturedPrompts[1], "Quality Guardrails")
 	assert.Contains(t, capturedPrompts[1], "parameterized queries")
 
@@ -662,7 +662,7 @@ func TestRunner_EmbeddedPrompts(t *testing.T) {
 	assert.Contains(t, capturedPrompts[8], "co-author")
 
 	// Step 9: Memory update — full embedded skill, not delegation
-	assert.Contains(t, capturedPrompts[9], ".memory/")
+	assert.Contains(t, capturedPrompts[9], "docs/context/")
 	assert.Contains(t, capturedPrompts[9], "summary.md")
 	assert.NotContains(t, capturedPrompts[9], "Update the memory vault.")
 

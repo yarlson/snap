@@ -3,7 +3,7 @@ Verify {{.TaskID}} is fully implemented by checking every acceptance criterion i
 ## Context
 
 1. Read CLAUDE.md or AGENTS.md if present — follow all project conventions
-2. Read .memory/memory-map.md, then summary.md, terminology.md, practices.md, and relevant domain files
+2. Read docs/context/context-map.md, then summary.md, terminology.md, practices.md, and relevant domain files
 3. Read {{.TaskPath}} for the full task definition and acceptance criteria
 4. Read the source code and tests that implement this task
 

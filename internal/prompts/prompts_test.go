@@ -25,7 +25,7 @@ func TestImplement_SpecificTask(t *testing.T) {
 	assert.Contains(t, result, "Implement TASK1")
 	assert.Contains(t, result, "TECHNOLOGY.md")
 	assert.Contains(t, result, "TASKS.md")
-	assert.Contains(t, result, "memory-map.md")
+	assert.Contains(t, result, "context-map.md")
 	assert.Contains(t, result, "Do not update the memory vault")
 }
 
@@ -118,7 +118,7 @@ func TestEnsureCompleteness(t *testing.T) {
 	assert.Contains(t, result, "acceptance criterion")
 	assert.Contains(t, result, "## Context")
 	assert.Contains(t, result, "CLAUDE.md")
-	assert.Contains(t, result, "memory-map.md")
+	assert.Contains(t, result, "context-map.md")
 	assert.Contains(t, result, "## Scope")
 	assert.Contains(t, result, "Do not refactor")
 	assert.Equal(t, strings.TrimSpace(result), result)
@@ -141,7 +141,7 @@ func TestCodeReview(t *testing.T) {
 	// Context loading (entry prompt)
 	assert.Contains(t, result, "CLAUDE.md")
 	assert.Contains(t, result, "AGENTS.md")
-	assert.Contains(t, result, "memory-map.md")
+	assert.Contains(t, result, "context-map.md")
 
 	// Scope
 	assert.Contains(t, result, "read-only")
@@ -218,12 +218,12 @@ func TestMemoryUpdate(t *testing.T) {
 	assert.Contains(t, result, "## Scope")
 	assert.Contains(t, result, "Do not modify any source code")
 
-	// Key vault markers
-	assert.Contains(t, result, ".memory/")
+	// Key context markers
+	assert.Contains(t, result, "docs/context/")
 	assert.Contains(t, result, "summary.md")
 	assert.Contains(t, result, "terminology.md")
 	assert.Contains(t, result, "practices.md")
-	assert.Contains(t, result, "memory-map.md")
+	assert.Contains(t, result, "context-map.md")
 	assert.Contains(t, result, "code is truth")
 
 	// No persona filler or delegation text

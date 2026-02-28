@@ -1,7 +1,7 @@
 ## Context
 
 1. Read CLAUDE.md or AGENTS.md if present — follow all project conventions
-2. Read .memory/memory-map.md, then summary.md, terminology.md, practices.md, and relevant domain files
+2. Read docs/context/context-map.md, then summary.md, terminology.md, practices.md, and relevant domain files
 3. Read {{.PRDPath}} for product context
 4. If TECHNOLOGY.md exists, read it for architecture and tech stack
 5. If DESIGN.md exists, read it for voice, terminology, content patterns, and UI conventions

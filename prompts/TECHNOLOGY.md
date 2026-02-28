@@ -13,7 +13,7 @@ Map the product requirements into an engineering plan.
 ## Context
 
 1. Read CLAUDE.md or AGENTS.md if present — follow all project conventions
-2. Read .memory/ vault files if present (memory-map.md, summary.md, terminology.md)
+2. Read docs/context/ files if present (context-map.md, summary.md, terminology.md)
 3. Read `docs/tasks/PRD.md` — this is the primary input
 4. Scan the codebase for existing architecture and patterns
 

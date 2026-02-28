@@ -1,6 +1,6 @@
 # Project Context
 
-This is a Go-based CLI tool.
+This is a Go-based CLI tool. For detailed project context (architecture, terminology, conventions, domain knowledge), see [`docs/context/`](docs/context/) — start with [`context-map.md`](docs/context/context-map.md).
 
 ## Structure
 
@@ -8,6 +8,7 @@ This is a Go-based CLI tool.
 
 - `cmd/` - CLI commands (Cobra-based)
 - `internal/` - Core business logic
+- `docs/context/` - Project context (architecture, domain knowledge, conventions)
 - `main.go` - Entry point
 
 ## Dependency Management

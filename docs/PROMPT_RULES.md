@@ -33,7 +33,7 @@ Entry prompts must tell the agent exactly what to read and in what order. Use a 
 ## Context
 
 1. Read CLAUDE.md or AGENTS.md if present — follow all project conventions
-2. Read .memory/memory-map.md, then summary.md, terminology.md, practices.md
+2. Read docs/context/context-map.md, then summary.md, terminology.md, practices.md
 3. Read [task-specific files]
 4. Study existing source code for established patterns
 ```

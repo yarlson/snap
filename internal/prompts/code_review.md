@@ -1,7 +1,7 @@
 ## Context
 
 1. Read CLAUDE.md or AGENTS.md if present — understand project conventions and tech stack
-2. Read .memory/memory-map.md, then summary.md and practices.md for project context
+2. Read docs/context/context-map.md, then summary.md and practices.md for project context
 
 ## Scope
 

@@ -163,7 +163,7 @@ func (p *Planner) gatherRequirements(ctx context.Context) error {
 // gatherRequirementsRaw uses raw-mode ReadLine for interactive TTY input.
 // Ctrl+C returns context.Canceled to abort the plan command.
 func (p *Planner) gatherRequirementsRaw(ctx context.Context) error {
-	fd := int(p.terminal.Fd()) //nolint:gosec // G115: fd fits int
+	fd := int(p.terminal.Fd())
 	return input.WithRawMode(fd, func() error {
 		for {
 			if ctx.Err() != nil {

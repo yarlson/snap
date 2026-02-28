@@ -27,5 +27,4 @@ but
 .snap/*
 !.snap/.gitignore
 /docs/tasks/
-/.memory/
 /docs/plan/

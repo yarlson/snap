@@ -20,7 +20,7 @@ func TestRenderPRDPrompt_WithoutBrief(t *testing.T) {
 	assert.Contains(t, result, ".snap/sessions/auth/tasks/PRD.md")
 	assert.NotContains(t, result, "Requirements Brief")
 	assert.Contains(t, result, "CLAUDE.md")
-	assert.Contains(t, result, ".memory/")
+	assert.Contains(t, result, "docs/context/")
 	assert.Contains(t, result, "Guardrails")
 	assert.Contains(t, result, "Completion")
 }
@@ -42,7 +42,7 @@ func TestRenderTechnologyPrompt(t *testing.T) {
 	assert.Contains(t, result, ".snap/sessions/auth/tasks/PRD.md")
 	assert.Contains(t, result, ".snap/sessions/auth/tasks/TECHNOLOGY.md")
 	assert.Contains(t, result, "CLAUDE.md")
-	assert.Contains(t, result, ".memory/")
+	assert.Contains(t, result, "docs/context/")
 	assert.Contains(t, result, "Guardrails")
 	assert.Contains(t, result, "Completion")
 }
@@ -55,7 +55,7 @@ func TestRenderDesignPrompt(t *testing.T) {
 	assert.Contains(t, result, ".snap/sessions/auth/tasks/TECHNOLOGY.md")
 	assert.Contains(t, result, ".snap/sessions/auth/tasks/DESIGN.md")
 	assert.Contains(t, result, "CLAUDE.md")
-	assert.Contains(t, result, ".memory/")
+	assert.Contains(t, result, "docs/context/")
 	assert.Contains(t, result, "Guardrails")
 	assert.Contains(t, result, "Completion")
 }
@@ -71,7 +71,7 @@ func TestRenderTasksPrompt(t *testing.T) {
 	assert.Contains(t, result, ".snap/sessions/auth/tasks/TASK")
 	assert.Contains(t, result, "vertical slice")
 	assert.Contains(t, result, "CLAUDE.md")
-	assert.Contains(t, result, ".memory/")
+	assert.Contains(t, result, "docs/context/")
 	assert.Contains(t, result, "Guardrails")
 	assert.Contains(t, result, "Completion")
 }
@@ -92,7 +92,7 @@ func TestAllPrompts_ContainCodebaseExploration(t *testing.T) {
 			result, err := tt.render()
 			require.NoError(t, err)
 			assert.Contains(t, result, "CLAUDE.md")
-			assert.Contains(t, result, ".memory/")
+			assert.Contains(t, result, "docs/context/")
 		})
 	}
 }

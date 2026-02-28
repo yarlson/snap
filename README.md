@@ -61,8 +61,8 @@ TASK1.md ──┐
            │   │  6. Re-validate after fixes         │
            │   │  7. Update docs                     │
            │   │  8. Commit code                     │
-           │   │  9. Update memory vault             │
-           │   │ 10. Commit memory                   │
+           │   │  9. Update project context          │
+           │   │ 10. Commit context                  │
            │   └──────────────────┬──────────────────┘
            │                      │
 TASK2.md ──┘                      ▼ next task

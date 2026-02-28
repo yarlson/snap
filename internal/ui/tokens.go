@@ -19,7 +19,7 @@ func init() {
 // evalColorMode sets colorsEnabled based on the NO_COLOR environment variable
 // and whether stdout is a terminal.
 func evalColorMode() {
-	colorsEnabled = os.Getenv("NO_COLOR") == "" && term.IsTerminal(int(os.Stdout.Fd())) //nolint:gosec // G115: fd fits int
+	colorsEnabled = os.Getenv("NO_COLOR") == "" && term.IsTerminal(int(os.Stdout.Fd()))
 }
 
 // ResetColorMode re-evaluates whether colors should be enabled based on the

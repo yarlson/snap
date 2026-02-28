@@ -11,7 +11,7 @@ Split the product and engineering plan into vertical slices. Each slice is one a
 ## Context
 
 1. Read CLAUDE.md or AGENTS.md if present — follow all project conventions
-2. Read .memory/ vault files if present (memory-map.md, summary.md, terminology.md)
+2. Read docs/context/ files if present (context-map.md, summary.md, terminology.md)
 3. Read `docs/tasks/PRD.md` — extract user-visible outcomes, non-negotiables, constraints, and acceptance criteria
 4. Read `docs/tasks/TECHNOLOGY.md` — extract architecture boundaries, tooling constraints, quality bars, and release requirements
 5. If `docs/tasks/DESIGN.md` exists, read it — extract voice/tone, terminology, content patterns, and UI conventions
