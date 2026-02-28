@@ -10,7 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yarlson/snap/internal/input"
+	"github.com/yarlson/tap"
+
 	"github.com/yarlson/snap/internal/model"
 	"github.com/yarlson/snap/internal/ui"
 	"github.com/yarlson/snap/internal/workflow"
@@ -36,7 +37,7 @@ type Planner struct {
 	tasksDir          string
 	output            io.Writer
 	input             io.Reader
-	terminal          *os.File     // when set and is a TTY, enables raw-mode input via ReadLine
+	interactive       bool         // when true, uses tap for interactive TTY input
 	briefFile         string       // filename for display (e.g., "brief.md")
 	briefBody         string       // file content
 	resume            bool         // when true, first executor call uses -c to continue previous conversation
@@ -68,11 +69,11 @@ func WithAfterFirstMessage(fn func() error) PlannerOption {
 	return func(p *Planner) { p.afterFirstMessage = fn }
 }
 
-// WithTerminal sets the terminal file for raw-mode input during Phase 1.
-// When set and stdin is a TTY, the planner uses ReadLine for interactive input
-// with proper Ctrl+C handling and escape sequence consumption.
-func WithTerminal(f *os.File) PlannerOption {
-	return func(p *Planner) { p.terminal = f }
+// WithInteractive enables interactive input via tap during Phase 1.
+// When true, the planner uses tap.Text for styled TTY input with
+// Ctrl+C/Escape abort support.
+func WithInteractive(interactive bool) PlannerOption {
+	return func(p *Planner) { p.interactive = interactive }
 }
 
 // WithBrief sets the brief file content, skipping Phase 1.
@@ -157,45 +158,51 @@ func (p *Planner) gatherRequirements(ctx context.Context) error {
 	}
 
 	// Chat loop: read user input, send with -c, repeat until /done or EOF.
-	if p.terminal != nil && input.IsTerminal(p.terminal) {
-		return p.gatherRequirementsRaw(ctx)
+	if p.interactive {
+		return p.gatherRequirementsInteractive(ctx)
 	}
 	return p.gatherRequirementsScanner(ctx)
 }
 
-// gatherRequirementsRaw uses raw-mode ReadLine for interactive TTY input.
-// Ctrl+C returns context.Canceled to abort the plan command.
-func (p *Planner) gatherRequirementsRaw(ctx context.Context) error {
-	fd := int(p.terminal.Fd())
-	return input.WithRawMode(fd, func() error {
-		for {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-
-			fmt.Fprint(p.output, "\n")
-			line, err := input.ReadLine(p.terminal, p.output, "snap plan> ")
-			if errors.Is(err, input.ErrInterrupt) {
-				return context.Canceled
-			}
-			if err != nil {
-				// EOF or read error — transition to Phase 2.
-				return nil //nolint:nilerr // EOF means end of input, not failure.
-			}
-
-			line = strings.TrimSpace(line)
-			if strings.EqualFold(line, "/done") {
-				return nil
-			}
-			if line == "" {
-				continue
-			}
-
-			if err := p.executor.Run(ctx, p.output, model.Thinking, "-c", line); err != nil {
-				return fmt.Errorf("chat message failed: %w", err)
-			}
+// gatherRequirementsInteractive uses tap.Text for interactive TTY input.
+// Ctrl+C or Escape returns context.Canceled to abort the plan command.
+func (p *Planner) gatherRequirementsInteractive(ctx context.Context) error {
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
-	})
+
+		fmt.Fprint(p.output, "\n")
+
+		result := tap.Text(ctx, tap.TextOptions{
+			Message:     "snap plan>",
+			Placeholder: "Describe your requirements, or /done to finish",
+			Validate: func(s string) error {
+				if strings.TrimSpace(s) == "" {
+					return errors.New("enter a message, or /done to finish")
+				}
+				return nil
+			},
+		})
+
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// tap.Text returns empty string when user aborts (Ctrl+C or Escape).
+		// The Validate func ensures non-empty input on normal submission.
+		if result == "" {
+			return context.Canceled
+		}
+
+		result = strings.TrimSpace(result)
+		if strings.EqualFold(result, "/done") {
+			return nil
+		}
+
+		if err := p.executor.Run(ctx, p.output, model.Thinking, "-c", result); err != nil {
+			return fmt.Errorf("chat message failed: %w", err)
+		}
+	}
 }
 
 // gatherRequirementsScanner uses bufio.Scanner for non-TTY (piped) input.

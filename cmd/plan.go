@@ -61,7 +61,7 @@ func planRun(_ *cobra.Command, args []string) error {
 	if input.IsTerminal(os.Stdin) {
 		planOutput = ui.NewSwitchWriter(os.Stdout, ui.WithLFToCRLF())
 	}
-	opts = append(opts, plan.WithOutput(planOutput), plan.WithInput(os.Stdin), plan.WithTerminal(os.Stdin))
+	opts = append(opts, plan.WithOutput(planOutput), plan.WithInput(os.Stdin), plan.WithInteractive(input.IsTerminal(os.Stdin)))
 
 	if fromFile != "" {
 		content, err := os.ReadFile(fromFile)

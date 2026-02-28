@@ -60,7 +60,7 @@
 
 **Raw mode** — Terminal mode where input is not line-buffered; each keystroke is immediately available to the application. Implemented via `termios` on Unix. Allows interactive features like single-key response to Ctrl+C and immediate escape sequence handling.
 
-**Interactive input** — User input from a TTY terminal in raw mode, character-by-character via `input.ReadLine()`. Supports Ctrl+C (abort), Backspace/Ctrl+U/Ctrl+W (editing), and proper escape sequence consumption (arrow keys, Home, End).
+**Interactive input** — User input from a TTY terminal via `tap.Text` component. Provides styled text input with placeholder text, supports Ctrl+C and Escape (abort), validation callbacks, and context cancellation. Used in Phase 1 of plan command for requirements gathering.
 
 **ReadLine** — Function that displays a styled prompt, reads one line of input in raw mode, and returns the submitted text. Supports full cursor movement and mid-line editing: arrow keys move cursor within the line, Backspace deletes at any position, printable characters insert at cursor, Enter submits regardless of cursor position, Ctrl+U clears the line, Ctrl+W deletes the word before cursor. Handles Ctrl+C (`ErrInterrupt`), escape sequences (consumed), and UTF-8 multi-byte characters. Prompt styling uses ColorSecondary + WeightBold, respecting NO_COLOR.
 
