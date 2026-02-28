@@ -14,11 +14,29 @@ import (
 
 // mockPlanProvider creates a mock claude script that accepts any args and exits 0.
 // It outputs a minimal stream-json line so the parser has something to process.
+// When MOCK_TASKS_DIR env var is set, the mock writes a minimal TASKS.md to that directory
+// so step 7 (task file generation) can parse task count.
 func mockPlanProvider(t *testing.T) string {
 	t.Helper()
 	mockBinDir := t.TempDir()
 	// The mock outputs a minimal assistant message in stream-json format, then exits.
+	// If MOCK_TASKS_DIR is set, it writes a TASKS.md with 2 tasks so step 7 can proceed.
 	script := `#!/bin/sh
+if [ -n "$MOCK_TASKS_DIR" ]; then
+  mkdir -p "$MOCK_TASKS_DIR"
+  cat > "$MOCK_TASKS_DIR/TASKS.md" << 'TASKSEOF'
+# TASKS
+
+## G. Task List
+
+| # | File | Name | Epic | Outcome | Risk | Size |
+|---|------|------|------|---------|------|------|
+| 0 | TASK0.md | Task zero | E1 | Works | Low | S |
+| 1 | TASK1.md | Task one | E2 | Works | Low | S |
+
+## H. Dependencies
+TASKSEOF
+fi
 echo '{"type":"assistant","message":{"content":[{"type":"text","text":"OK"}]}}'
 exit 0
 `
@@ -39,10 +57,13 @@ func TestE2E_PlanFreshProject(t *testing.T) {
 
 	mockPath := mockPlanProvider(t)
 
+	// The auto-created "default" session will have tasks at this path.
+	tasksDir := filepath.Join(projectDir, ".snap", "sessions", "default", "tasks")
+
 	// Run snap plan on a fresh project with no sessions — should auto-create "default".
 	plan := exec.CommandContext(ctx, binPath, "plan")
 	plan.Dir = projectDir
-	plan.Env = append(os.Environ(), "PATH="+mockPath)
+	plan.Env = append(os.Environ(), "PATH="+mockPath, "MOCK_TASKS_DIR="+tasksDir)
 	plan.Stdin = strings.NewReader("/done\n")
 
 	output, planErr := plan.CombinedOutput()
@@ -64,7 +85,6 @@ func TestE2E_PlanFreshProject(t *testing.T) {
 	assert.True(t, info.IsDir())
 
 	// The tasks directory should exist.
-	tasksDir := filepath.Join(defaultSessionDir, "tasks")
 	info, err = os.Stat(tasksDir)
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
@@ -86,12 +106,14 @@ func TestE2E_CUJ2_PlanInteractive(t *testing.T) {
 	out, err := create.CombinedOutput()
 	require.NoError(t, err, "snap new failed: %s", out)
 
+	tasksDir := filepath.Join(projectDir, ".snap", "sessions", "auth", "tasks")
+
 	// Step 2: Run plan with piped input.
 	mockPath := mockPlanProvider(t)
 
 	plan := exec.CommandContext(ctx, binPath, "plan", "auth")
 	plan.Dir = projectDir
-	plan.Env = append(os.Environ(), "PATH="+mockPath)
+	plan.Env = append(os.Environ(), "PATH="+mockPath, "MOCK_TASKS_DIR="+tasksDir)
 	plan.Stdin = strings.NewReader("Add auth feature\n/done\n")
 
 	output, planErr := plan.CombinedOutput()
@@ -99,13 +121,14 @@ func TestE2E_CUJ2_PlanInteractive(t *testing.T) {
 
 	outputStr := string(output)
 
-	// Assert step headers present (6-step pipeline: PRD → parallel TECH+DESIGN → 4-step task splitting).
-	assert.Contains(t, outputStr, "Step 1/6")
-	assert.Contains(t, outputStr, "Step 2/6")
-	assert.Contains(t, outputStr, "Step 3/6")
-	assert.Contains(t, outputStr, "Step 4/6")
-	assert.Contains(t, outputStr, "Step 5/6")
-	assert.Contains(t, outputStr, "Step 6/6")
+	// Assert step headers present (7-step pipeline).
+	assert.Contains(t, outputStr, "Step 1/7")
+	assert.Contains(t, outputStr, "Step 2/7")
+	assert.Contains(t, outputStr, "Step 3/7")
+	assert.Contains(t, outputStr, "Step 4/7")
+	assert.Contains(t, outputStr, "Step 5/7")
+	assert.Contains(t, outputStr, "Step 6/7")
+	assert.Contains(t, outputStr, "Step 7/7")
 
 	// Assert planning complete message.
 	assert.Contains(t, outputStr, "Planning complete")
@@ -132,6 +155,8 @@ func TestE2E_CUJ2_PlanWithFile(t *testing.T) {
 	out, err := create.CombinedOutput()
 	require.NoError(t, err, "snap new failed: %s", out)
 
+	tasksDir := filepath.Join(projectDir, ".snap", "sessions", "auth", "tasks")
+
 	// Step 2: Create brief.md.
 	briefPath := filepath.Join(projectDir, "brief.md")
 	require.NoError(t, os.WriteFile(briefPath, []byte("I want OAuth2 authentication"), 0o600))
@@ -141,7 +166,7 @@ func TestE2E_CUJ2_PlanWithFile(t *testing.T) {
 
 	plan := exec.CommandContext(ctx, binPath, "plan", "auth", "--from", "brief.md")
 	plan.Dir = projectDir
-	plan.Env = append(os.Environ(), "PATH="+mockPath)
+	plan.Env = append(os.Environ(), "PATH="+mockPath, "MOCK_TASKS_DIR="+tasksDir)
 
 	output, planErr := plan.CombinedOutput()
 	require.NoError(t, planErr, "snap plan --from failed: %s", output)
@@ -151,13 +176,14 @@ func TestE2E_CUJ2_PlanWithFile(t *testing.T) {
 	// Assert --from header.
 	assert.Contains(t, outputStr, "using brief.md as input")
 
-	// Assert step headers (6-step pipeline: PRD → parallel TECH+DESIGN → 4-step task splitting).
-	assert.Contains(t, outputStr, "Step 1/6")
-	assert.Contains(t, outputStr, "Step 2/6")
-	assert.Contains(t, outputStr, "Step 3/6")
-	assert.Contains(t, outputStr, "Step 4/6")
-	assert.Contains(t, outputStr, "Step 5/6")
-	assert.Contains(t, outputStr, "Step 6/6")
+	// Assert step headers (7-step pipeline).
+	assert.Contains(t, outputStr, "Step 1/7")
+	assert.Contains(t, outputStr, "Step 2/7")
+	assert.Contains(t, outputStr, "Step 3/7")
+	assert.Contains(t, outputStr, "Step 4/7")
+	assert.Contains(t, outputStr, "Step 5/7")
+	assert.Contains(t, outputStr, "Step 6/7")
+	assert.Contains(t, outputStr, "Step 7/7")
 
 	// Assert planning complete.
 	assert.Contains(t, outputStr, "Planning complete")
@@ -232,12 +258,13 @@ func TestE2E_PlanAutoDetectSingleSession(t *testing.T) {
 	out, err := create.CombinedOutput()
 	require.NoError(t, err, "snap new failed: %s", out)
 
+	tasksDir := filepath.Join(projectDir, ".snap", "sessions", "auth", "tasks")
 	mockPath := mockPlanProvider(t)
 
 	// Run plan without session name — should auto-detect.
 	plan := exec.CommandContext(ctx, binPath, "plan")
 	plan.Dir = projectDir
-	plan.Env = append(os.Environ(), "PATH="+mockPath)
+	plan.Env = append(os.Environ(), "PATH="+mockPath, "MOCK_TASKS_DIR="+tasksDir)
 	plan.Stdin = strings.NewReader("/done\n")
 
 	output, planErr := plan.CombinedOutput()
@@ -265,12 +292,14 @@ func TestE2E_PlanFileListing(t *testing.T) {
 	out, err := create.CombinedOutput()
 	require.NoError(t, err, "snap new failed: %s", out)
 
+	tasksDir := filepath.Join(projectDir, ".snap", "sessions", "auth", "tasks")
+
 	// Step 2: Run plan (mock provider outputs nothing, so no files generated).
 	mockPath := mockPlanProvider(t)
 
 	plan := exec.CommandContext(ctx, binPath, "plan", "auth")
 	plan.Dir = projectDir
-	plan.Env = append(os.Environ(), "PATH="+mockPath)
+	plan.Env = append(os.Environ(), "PATH="+mockPath, "MOCK_TASKS_DIR="+tasksDir)
 	plan.Stdin = strings.NewReader("/done\n")
 
 	output, planErr := plan.CombinedOutput()

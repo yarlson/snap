@@ -28,9 +28,14 @@ type parallelResult struct {
 
 // runParallel spawns goroutines via errgroup for each task, collects results with timing,
 // and waits for all to complete or context cancel. Each goroutine writes to its own buffer.
-func runParallel(ctx context.Context, executor workflow.Executor, tasks []parallelTask) []parallelResult {
+// When limit > 0, errgroup.SetLimit restricts maximum concurrent goroutines.
+func runParallel(ctx context.Context, executor workflow.Executor, tasks []parallelTask, limit int) []parallelResult {
 	results := make([]parallelResult, len(tasks))
 	g, gctx := errgroup.WithContext(ctx)
+
+	if limit > 0 {
+		g.SetLimit(limit)
+	}
 
 	for i, task := range tasks {
 		results[i] = parallelResult{name: task.name, output: &bytes.Buffer{}}

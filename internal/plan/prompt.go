@@ -13,8 +13,10 @@ var promptFS embed.FS
 
 // promptData holds template parameters for plan prompt rendering.
 type promptData struct {
-	TasksDir string
-	Brief    string
+	TasksDir   string
+	Brief      string
+	TaskNumber int
+	TaskSpec   string
 }
 
 // RenderPrinciplesPreamble renders the shared engineering principles preamble.
@@ -87,6 +89,19 @@ func RenderMergeTasksPrompt() (string, error) {
 // RenderGenerateTaskSummaryPrompt renders the TASKS.md generation prompt.
 func RenderGenerateTaskSummaryPrompt(tasksDir string) (string, error) {
 	prompt, err := renderTemplate("prompts/generate-task-summary.md", promptData{TasksDir: tasksDir})
+	if err != nil {
+		return "", err
+	}
+	return prependPreamble(prompt)
+}
+
+// RenderGenerateTaskFilePrompt renders the prompt for generating a single TASK<N>.md file.
+func RenderGenerateTaskFilePrompt(tasksDir string, taskNumber int, taskSpec string) (string, error) {
+	prompt, err := renderTemplate("prompts/generate-task-file.md", promptData{
+		TasksDir:   tasksDir,
+		TaskNumber: taskNumber,
+		TaskSpec:   taskSpec,
+	})
 	if err != nil {
 		return "", err
 	}

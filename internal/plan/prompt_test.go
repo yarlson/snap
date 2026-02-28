@@ -205,6 +205,35 @@ func TestPreamblePrepended_GenerateTaskSummary(t *testing.T) {
 	assert.True(t, strings.HasPrefix(result, preamble), "GenerateTaskSummary prompt should start with preamble")
 }
 
+func TestRenderGenerateTaskFilePrompt(t *testing.T) {
+	taskSpec := "| 3 | TASK3.md | Parallel batched task file generation | Epic 4 | TASK<N>.md files generated | Medium | M |"
+	result, err := RenderGenerateTaskFilePrompt(".snap/sessions/auth/tasks", 3, taskSpec)
+	require.NoError(t, err)
+
+	// Contains tasksDir references.
+	assert.Contains(t, result, ".snap/sessions/auth/tasks")
+
+	// Contains task number.
+	assert.Contains(t, result, "TASK3.md")
+
+	// Contains task spec text.
+	assert.Contains(t, result, "Parallel batched task file generation")
+
+	// Contains 15-section format.
+	assert.Contains(t, result, "0. Task Type and Placement")
+	assert.Contains(t, result, "14. Follow-ups Unlocked")
+
+	// Contains guardrails.
+	assert.Contains(t, result, "Guardrails")
+
+	// Contains preamble (via prependPreamble).
+	assert.Contains(t, result, "simplest solution")
+
+	// Contains codebase exploration context.
+	assert.Contains(t, result, "CLAUDE.md")
+	assert.Contains(t, result, "docs/context/")
+}
+
 func TestAllPrompts_ContainCodebaseExploration(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -215,6 +244,9 @@ func TestAllPrompts_ContainCodebaseExploration(t *testing.T) {
 		{"Design", func() (string, error) { return RenderDesignPrompt("tasks") }},
 		{"CreateTasks", func() (string, error) { return RenderCreateTasksPrompt("tasks") }},
 		{"GenerateTaskSummary", func() (string, error) { return RenderGenerateTaskSummaryPrompt("tasks") }},
+		{"GenerateTaskFile", func() (string, error) {
+			return RenderGenerateTaskFilePrompt("tasks", 0, "spec")
+		}},
 	}
 
 	for _, tt := range tests {

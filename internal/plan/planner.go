@@ -227,13 +227,15 @@ func (p *Planner) gatherRequirementsScanner(ctx context.Context) error {
 }
 
 // generateDocuments runs the autonomous Phase 2 document generation pipeline.
-// Pipeline: PRD (sequential) → TECHNOLOGY + DESIGN (parallel) → 4-step task splitting (sequential).
+// Pipeline: PRD (sequential) → TECHNOLOGY + DESIGN (parallel) → 4-step task splitting (sequential)
+// → parallel batched TASK<N>.md generation.
 func (p *Planner) generateDocuments(ctx context.Context) error {
 	fmt.Fprint(p.output, ui.Step("Generating planning documents..."))
 
-	const totalSteps = 6
+	const totalSteps = 7
+	const taskFileBatchSize = 5
 
-	// --- Step 1/6: Generate PRD (sequential) ---
+	// --- Step 1/7: Generate PRD (sequential) ---
 	if ctx.Err() != nil {
 		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 1/%d", totalSteps)))
 		fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
@@ -274,7 +276,7 @@ func (p *Planner) generateDocuments(ctx context.Context) error {
 
 	fmt.Fprintln(p.output, ui.StepComplete("Step complete", time.Since(start)))
 
-	// --- Step 2/6: Generate technology plan + design spec (parallel) ---
+	// --- Step 2/7: Generate technology plan + design spec (parallel) ---
 	if ctx.Err() != nil {
 		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 2/%d", totalSteps)))
 		fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
@@ -298,7 +300,7 @@ func (p *Planner) generateDocuments(ctx context.Context) error {
 
 	fmt.Fprint(p.output, ui.StepNumbered(2, totalSteps, "Generate technology plan + design spec"))
 
-	results := runParallel(ctx, p.executor, tasks)
+	results := runParallel(ctx, p.executor, tasks, 0)
 
 	// Print sub-step results and check for failures.
 	var parallelFailed bool
@@ -396,8 +398,128 @@ func (p *Planner) generateDocuments(ctx context.Context) error {
 		fmt.Fprintln(p.output, ui.StepComplete("Step complete", time.Since(start)))
 	}
 
+	// --- Step 7/7: Generate TASK<N>.md files (parallel, batched) ---
+	if ctx.Err() != nil {
+		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 7/%d", totalSteps)))
+		fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+		return ctx.Err()
+	}
+
+	taskSpecs, err := ExtractTaskSpecs(p.tasksDir)
+	if err != nil {
+		return fmt.Errorf("failed to parse TASKS.md for task count: %w", err)
+	}
+
+	fmt.Fprint(p.output, ui.StepNumbered(7, totalSteps, "Generate task files"))
+
+	if len(taskSpecs) == 0 {
+		fmt.Fprintln(p.output, ui.StepComplete("0 task files generated", time.Duration(0)))
+	} else if err := p.generateTaskFiles(ctx, taskSpecs, totalSteps, taskFileBatchSize); err != nil {
+		return err
+	}
+
 	fmt.Fprintln(p.output)
 	fmt.Fprintln(p.output, ui.Complete("Planning complete"))
+
+	return nil
+}
+
+// generateTaskFiles generates TASK<N>.md files in parallel batches.
+func (p *Planner) generateTaskFiles(ctx context.Context, specs []TaskSpec, totalSteps, batchSize int) error {
+	// Build parallel tasks for each spec.
+	var taskFileTasks []parallelTask
+	for _, spec := range specs {
+		prompt, err := RenderGenerateTaskFilePrompt(p.tasksDir, spec.Number, spec.Spec)
+		if err != nil {
+			return fmt.Errorf("failed to render task file prompt for TASK%d: %w", spec.Number, err)
+		}
+		taskFileTasks = append(taskFileTasks, parallelTask{
+			name:      fmt.Sprintf("TASK%d.md", spec.Number),
+			modelType: model.Thinking,
+			args:      []string{prompt},
+		})
+	}
+
+	if len(taskFileTasks) <= batchSize {
+		// Small batch: run all at once, print simple completion line.
+		start := time.Now()
+		results := runParallel(ctx, p.executor, taskFileTasks, batchSize)
+
+		var failures []string
+		for _, r := range results {
+			if r.err != nil {
+				failures = append(failures, fmt.Sprintf("%s: %v", r.name, r.err))
+			}
+		}
+
+		if len(failures) > 0 {
+			fmt.Fprintln(p.output, ui.StepFailed(
+				fmt.Sprintf("%d task files generated", len(taskFileTasks)-len(failures)),
+				time.Since(start),
+			))
+			for _, f := range failures {
+				fmt.Fprintln(p.output, ui.ErrorWithDetails("Task file generation failed", []string{f}))
+			}
+			if ctx.Err() != nil {
+				fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 7/%d", totalSteps)))
+				fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+				return ctx.Err()
+			}
+			return fmt.Errorf("step 7/%d: %d task file(s) failed: %s", totalSteps, len(failures), strings.Join(failures, "; "))
+		}
+
+		fmt.Fprintln(p.output, ui.StepComplete(
+			fmt.Sprintf("%d task files generated", len(taskFileTasks)),
+			time.Since(start),
+		))
+		return nil
+	}
+
+	// Large batch: split into batches, run sequentially, print batch progress.
+	batches := splitBatches(taskFileTasks, batchSize)
+	var allFailures []string
+
+	for batchIdx, batch := range batches {
+		if ctx.Err() != nil {
+			fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 7/%d", totalSteps)))
+			fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+			return ctx.Err()
+		}
+
+		firstTask := batchIdx * batchSize
+		lastTask := firstTask + len(batch) - 1
+		batchLabel := fmt.Sprintf("Batch %d/%d (tasks %d\u2013%d)", batchIdx+1, len(batches), firstTask, lastTask)
+
+		start := time.Now()
+		results := runParallel(ctx, p.executor, batch, batchSize)
+
+		var failures []string
+		for _, r := range results {
+			if r.err != nil {
+				failures = append(failures, fmt.Sprintf("%s: %v", r.name, r.err))
+			}
+		}
+
+		if len(failures) > 0 {
+			fmt.Fprintln(p.output, ui.StepFailed(batchLabel, time.Since(start)))
+			for _, f := range failures {
+				fmt.Fprintln(p.output, ui.ErrorWithDetails(batchLabel, []string{f}))
+			}
+			allFailures = append(allFailures, failures...)
+			if ctx.Err() != nil {
+				fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 7/%d", totalSteps)))
+				fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+				return ctx.Err()
+			}
+			continue
+		}
+
+		fmt.Fprintln(p.output, ui.StepComplete(batchLabel, time.Since(start)))
+	}
+
+	if len(allFailures) > 0 {
+		return fmt.Errorf("step 7/%d: %d task file(s) failed: %s", totalSteps, len(allFailures), strings.Join(allFailures, "; "))
+	}
 
 	return nil
 }
