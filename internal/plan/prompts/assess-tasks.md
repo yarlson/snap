@@ -9,6 +9,7 @@ Evaluate every proposed task against these 5 anti-patterns. For each task, state
 The task describes a single technical layer only — it does not cross layers to produce a user-visible outcome.
 
 **Examples of horizontal slices:**
+
 - "Add database migrations for user tables"
 - "Create API type definitions"
 - "Set up Redux store and reducers"
@@ -21,6 +22,7 @@ The task describes a single technical layer only — it does not cross layers to
 The task has no user-visible outcome. It is purely setup, tooling, configuration, or documentation.
 
 **Examples of infrastructure/docs-only tasks:**
+
 - "Set up CI/CD pipeline"
 - "Write API documentation"
 - "Configure linting and formatting"
@@ -33,6 +35,7 @@ The task has no user-visible outcome. It is purely setup, tooling, configuration
 The task covers multiple user flows, the outcome requires more than one sentence to describe, or it has more than 7 acceptance criteria.
 
 **Examples of too-broad tasks:**
+
 - "Implement user management (registration, login, profile, settings)"
 - "Build the dashboard with analytics, notifications, and quick actions"
 - A task with 12 acceptance criteria spanning different features
@@ -44,6 +47,7 @@ The task covers multiple user flows, the outcome requires more than one sentence
 The task is not independently demoable, is trivially small, or has fewer than 3 scope bullets.
 
 **Examples of too-narrow tasks:**
+
 - "Add a tooltip to the save button"
 - "Rename the config field from X to Y"
 - A task with 2 scope bullets and 2 acceptance criteria
@@ -55,6 +59,7 @@ The task is not independently demoable, is trivially small, or has fewer than 3 
 The task cannot be demonstrated to a non-technical user. There is no visible, observable, or interactable outcome.
 
 **Examples of non-demoable tasks:**
+
 - "Refactor internal data structures for performance"
 - "Migrate from library A to library B"
 - "Add unit tests for edge cases"

@@ -111,13 +111,14 @@ Planner supports two input modes:
 
 ### Phase 2: Autonomous Document Generation
 
-- Claude generates task files based on brief via a 6-step pipeline:
+- Claude generates task files based on brief via a 7-step pipeline:
   1. **PRD.md** — Product requirements document (features, acceptance criteria, scope)
   2. **TECHNOLOGY.md** and **DESIGN.md** — Technology decisions and design specification (generated in parallel)
   3. **Task list creation** — Initial rough task breakdown based on PRD, TECHNOLOGY, and DESIGN
   4. **Task assessment** — Evaluates each task against anti-pattern criteria (horizontal slices, infrastructure-only, too broad, too narrow, non-demoable)
   5. **Task refinement** — Fixes flagged tasks via merging, splitting, or reworking to create demoable vertical slices
   6. **TASKS.md generation** — Writes final task summary with sections A–J (overview, assumptions, principles, CUJs, epics, capability map, task list, dependencies, risks, coverage)
+  7. **Task file generation** — Generates individual TASK<N>.md files in parallel batches from task specifications in TASKS.md section G
 - Each document generated via LLM call with specialized prompt template
 - **Engineering principles preamble**: All Phase 2 prompts are prepended with shared engineering principles (KISS, DRY, SOLID, YAGNI) to guide consistent decision-making across all generated documents
 - Documents written to `.snap/sessions/<session>/tasks/`
@@ -164,8 +165,16 @@ Phase 2 flow:
    - Call LLM executor with -c flag (continues conversation chain)
    - Write TASKS.md with sections A–J to tasks directory
    - Display step completion
-7. Print file listing showing generated files
-8. Print "Run: snap run <session>" suggestion
+7. **Step 7 (Parallel, Batched)**: Generate task files
+   - Parse TASKS.md section G to extract task specifications via `ExtractTaskSpecs()`
+   - For each task spec, render `generate-task-file.md` prompt template with task number and specification
+   - Prepend engineering principles preamble to each task file prompt
+   - Execute LLM calls in parallel batches (batch size: 5 tasks per batch)
+   - Use `model.Thinking` model type for generating detailed task files
+   - Write TASK<N>.md files to tasks directory for each task
+   - Print individual batch completions with timing and file counts
+8. Print file listing showing all generated files (PRD.md, TECHNOLOGY.md, DESIGN.md, TASKS.md, TASK1.md, TASK2.md, etc.)
+9. Print "Run: snap run <session>" suggestion
 
 ### Engineering Principles
 

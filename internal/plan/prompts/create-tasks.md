@@ -22,6 +22,7 @@ If PRD or TECHNOLOGY is missing or empty, state what is missing and include a "M
 Scan the codebase. If source files, tests, and build tooling already exist, skip Walking Skeleton — start with vertical feature slices. If the repository is empty or minimal (no source, no tests, no CI), include Walking Skeleton as Task 0.
 
 Walking Skeleton requirements (when included):
+
 - Built, launched, and exercised end-to-end using the primary workflow from `{{.TasksDir}}/TECHNOLOGY.md`
 - Deployable/distributable/runnable as defined by the docs
 - Includes app shell/navigation, placeholder screens, minimal happy-path flow

@@ -3,25 +3,33 @@ Fix all flagged tasks from the assessment. Apply the indicated action for each n
 ## Actions
 
 ### MERGE
+
 Combine the flagged task with the specified adjacent task. The merged task must:
+
 - Cross multiple layers (vertical slice)
 - Have a single, clear user-visible outcome
 - Meet the sizing heuristics (3–10 scope bullets, 3–7 acceptance criteria)
 
 ### ABSORB
+
 Fold the flagged task's deliverables into the specified feature task. The absorbing task must:
+
 - Retain its original user-visible outcome
 - Incorporate the infrastructure/docs work as part of its scope
 - Not exceed sizing limits after absorption
 
 ### SPLIT
+
 Divide the flagged task along user-visible boundaries into 2–3 smaller tasks. Each resulting task must:
+
 - Be independently demoable
 - Have its own user-visible outcome (one sentence)
 - Meet the sizing heuristics
 
 ### REWORK
+
 Adjust the flagged task's scope to include a visible deliverable. The reworked task must:
+
 - Have a concrete outcome demonstrable to a non-technical user
 - Still accomplish the original technical goal
 
