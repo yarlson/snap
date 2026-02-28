@@ -12,7 +12,7 @@ The `run` command orchestrates the task implementation workflow. It supports thr
 
 **Files**:
 
-- `cmd/run.go` — Run command definition and logic
+- `cmd/run.go` — Run command definition and logic (includes pre-flight git remote detection and gh CLI validation)
 - `cmd/run_test.go` — Unit tests for session resolution
 - `cmd/run_e2e_test.go` — E2E tests for all workflows
 
@@ -34,6 +34,14 @@ snap run [session] [flags]
 - `--show-state` — Display workflow progress and exit
 - `--show-state --json` — Output raw state JSON
 - `--no-color` — Disable ANSI colors (via `NO_COLOR` env var)
+
+## Pre-flight Checks
+
+Before starting the workflow, `run` performs:
+
+1. **Git remote detection** — Detects the URL for `origin` remote (empty if not in a git repo or no remote configured)
+2. **GitHub validation** — If remote is GitHub, validates that `gh` CLI is available in PATH (see [`provider.md`](provider.md#gh-cli-validation))
+3. **Provider validation** — Validates selected LLM provider CLI is available (see [`provider.md`](provider.md))
 
 ## Session Resolution Logic
 

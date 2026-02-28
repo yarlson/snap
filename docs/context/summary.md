@@ -69,6 +69,7 @@ Workflow Runner (orchestrates 10-step iteration workflow)
 - **Version flag**: `--version` displays snap version (set at build time via ldflags)
 - **State inspection**: `--show-state` displays workflow progress in human-readable format; `--show-state --json` outputs raw state JSON; works with sessions
 - **Color output control**: NO_COLOR environment variable support (follows https://no-color.org/ standard); automatic color disabling in non-TTY contexts
+- **Auto-push to git**: Upon workflow completion, automatically pushes commits to configured git remote (origin); detects GitHub remotes and validates `gh` CLI availability for future PR/CI features
 - **CI/CD integration**: GitHub Actions workflow validates lint and race conditions on every push and PR
 - **Release automation**: Automated binary builds and GitHub Releases via GoReleaser (linux/darwin, amd64/arm64); triggered on version tag push; workflow enforces lint and test before release
 

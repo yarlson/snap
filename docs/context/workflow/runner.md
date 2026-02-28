@@ -91,11 +91,12 @@ After iteration 10 completes, loop restarts at step 1 for next task.
 
 ## Control Flow
 
-**Task selection**:
+**Task selection and completion**:
 
 - `selectIdleTask()` — Pick next incomplete task from state
 - Scans task directory for TASK\*.md files (see [`tasks.md`](tasks.md))
 - If no tasks found, runs diagnostics to detect case-mismatched files or PRD-embedded headers
+- When all tasks complete, calls `postrun.Run()` to handle post-completion actions (see [`../infra/postrun.md`](../infra/postrun.md))
 - Idle tasks polled until one available
 
 **Signal handling & interruption**:

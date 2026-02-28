@@ -89,6 +89,32 @@ Or use a different provider:
 
 - `TestPreflightProviderCLI_MissingBinary()` — End-to-end: builds snap binary, removes provider from PATH, verifies helpful error
 
+## GitHub CLI Validation
+
+**Function**: `ValidateGH()` in `internal/provider/factory.go`
+
+Checks that the `gh` CLI binary exists in PATH. Required when workflow targets a GitHub remote and intends to create PRs or interact with CI (see [`../infra/postrun.md`](../infra/postrun.md)).
+
+Called during pre-flight checks in `cmd/run.go` if git remote is detected as GitHub.
+
+### Error Format
+
+```
+Error: gh not found in PATH
+
+GitHub features require the gh CLI. Install it:
+  https://cli.github.com/
+
+Or use a non-GitHub remote to skip GitHub features
+```
+
+### Testing
+
+**Unit tests** (`internal/provider/factory_test.go`):
+
+- `TestValidateGH_Missing()` — Validates error format when gh not in PATH
+- `TestValidateGH_Exists()` — Confirms no error when gh binary exists
+
 ## Design Notes
 
 - **Guard against drift**: `TestProviderMapMatchesExecutorFactory()` ensures every provider in the ValidateCLI map is also supported by NewExecutorFromEnv
