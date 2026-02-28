@@ -40,7 +40,7 @@
 - `internal/` — Core business logic (unexported, private to module)
 - `internal/session/` — Session management (create, validate, list, delete, status derivation, path resolution)
 - `internal/state/` — State persistence with session-scoped support via `NewManagerInDir()`
-- `internal/input/` — Terminal input handling (raw mode, interactive readline with Ctrl+C support, escape sequence handling)
+- `internal/input/` — Terminal input detection and reader configuration (TTY detection, input mode selection, structured reader)
 - `internal/plan/` — Planning pipeline (Planner orchestration, Phase 1 requirements gathering with TTY/pipe dispatch, Phase 2 document generation, prompt rendering, template-based generation)
 - `internal/plan/prompts/` — Markdown templates for PRD, TECHNOLOGY, DESIGN, and task splitting prompts
 - `main.go` — Entry point
@@ -100,34 +100,16 @@
 - Validation callback returns error for empty input: "enter a message, or /done to finish"
 - Returns empty string on user abort (Ctrl+C or Escape) — convert to `context.Canceled` for graceful shutdown
 
-**Raw-mode input for run command reader**:
-
-- Use `input.WithRawMode(fd, fn)` to enter/exit raw terminal mode safely (used by `cmd/run.go`)
-- Raw mode ensures terminal restoration on function return, panic, or signal
-- Implements signal handlers for SIGINT/SIGTERM to restore terminal before process exit
-- Use within WithRawMode: `input.ReadLine(r, w, prompt)` for interactive line input
-- ReadLine handles:
-  - Arrow keys (left/right) for cursor movement within the line
-  - Backspace for rune-aware deletion at any cursor position
-  - Ctrl+U to clear the entire line
-  - Ctrl+W to delete the word before the cursor
-  - Ctrl+C (returns `input.ErrInterrupt`) to abort
-  - ESC sequences (consumed to prevent garbage output)
-  - UTF-8 multi-byte characters with proper cursor positioning
-  - Styled prompts (ColorSecondary + WeightBold, respecting NO_COLOR)
-
 **Input mode selection**:
 
 - Detect TTY: `input.IsTerminal(file)` checks if file is connected to terminal
 - For plan Phase 1: dispatch to tap.Text (TTY) or bufio.Scanner (piped)
-- For run command reader: use raw-mode input when TTY detected
-- Use buffered input (bufio.Scanner) when not TTY (piped/redirected input)
+- For run command reader: use structured input mode when TTY detected, buffered input when piped
 
 **Error handling in interactive input**:
 
 - For tap.Text: empty string result with no context error signals user abort — convert to `context.Canceled`
-- For raw-mode ReadLine: `input.ErrInterrupt` signals user abort (Ctrl+C) — convert to `context.Canceled`
-- EOF from ReadLine or Scanner — transition to next phase or exit with graceful completion
+- EOF from Scanner — transition to next phase or exit with graceful completion
 - All other errors — propagate with context
 
 ## Visual Validation

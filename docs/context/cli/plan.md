@@ -227,8 +227,8 @@ After successful completion:
   - `Text(ctx, TextOptions)` — interactive text input with validation, placeholder, and abort support (Ctrl+C, Escape)
   - `TextOptions` — configuration with Message, Placeholder, and Validate callback
 - **internal/input package**:
-  - `IsTerminal(*os.File)` — checks if file descriptor is a TTY
-  - Still used by `cmd/run.go` for reader configuration (separate from plan interactive input)
+  - `IsTerminal(*os.File)` — checks if file descriptor is a TTY (used by both plan and run for input mode detection)
+  - `NewReader()`, `NewMode()` — input handling for run command reader configuration
 - **internal/plan package**:
   - Planner implementation, prompt rendering, Phase 1/2 logic
   - Options: `WithResume()`, `WithAfterFirstMessage()`, `WithBrief()`, `WithInput()`, `WithOutput()`, `WithInteractive()`
