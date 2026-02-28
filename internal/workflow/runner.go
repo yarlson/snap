@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"github.com/yarlson/snap/internal/model"
-	"github.com/yarlson/snap/internal/prompts"
 	"github.com/yarlson/snap/internal/queue"
 	"github.com/yarlson/snap/internal/snapshot"
 	"github.com/yarlson/snap/internal/state"
 	"github.com/yarlson/snap/internal/ui"
+	"github.com/yarlson/snap/internal/workflow/prompts"
 )
 
 // workflowStepCount is the number of steps in the iteration workflow.

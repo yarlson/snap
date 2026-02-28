@@ -139,7 +139,10 @@ func (p *Planner) gatherRequirements(ctx context.Context) error {
 
 	// Send the initial requirements-gathering prompt.
 	// When resuming, add -c flag to continue previous conversation.
-	prompt := RenderRequirementsPrompt()
+	prompt, err := RenderRequirementsPrompt()
+	if err != nil {
+		return fmt.Errorf("requirements prompt failed: %w", err)
+	}
 	var initArgs []string
 	if p.resume {
 		initArgs = append(initArgs, "-c")

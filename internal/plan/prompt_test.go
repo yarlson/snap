@@ -8,9 +8,14 @@ import (
 )
 
 func TestRenderRequirementsPrompt(t *testing.T) {
-	prompt := RenderRequirementsPrompt()
-	assert.Contains(t, prompt, "requirements")
+	prompt, err := RenderRequirementsPrompt()
+	require.NoError(t, err)
+	assert.Contains(t, prompt, "## Context")
+	assert.Contains(t, prompt, "CLAUDE.md")
+	assert.Contains(t, prompt, "docs/context/")
+	assert.Contains(t, prompt, "## Process")
 	assert.Contains(t, prompt, "/done")
+	assert.Contains(t, prompt, "## Completion")
 }
 
 func TestRenderPRDPrompt_WithoutBrief(t *testing.T) {
