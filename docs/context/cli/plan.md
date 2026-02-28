@@ -117,6 +117,7 @@ Planner supports two input modes:
   3. **DESIGN.md** — High-level design specification
   4. **TASK\*.md** — Individual task files (TASK1.md, TASK2.md, etc.)
 - Each document generated via LLM call with specialized prompt template
+- **Engineering principles preamble**: All Phase 2 prompts are prepended with shared engineering principles (KISS, DRY, SOLID, YAGNI) to guide consistent decision-making across all generated documents
 - Documents written to `.snap/sessions/<session>/tasks/`
 - File listing printed after completion
 
@@ -124,11 +125,23 @@ Phase 2 flow:
 
 1. For each plan step (PRD, Technology, Design, Tasks):
    - Render specialized prompt template
+   - Prepend engineering principles preamble to guide decision-making
    - Call LLM executor
    - Write output to tasks directory with appropriate filename
    - Display step completion
 2. Print file listing showing generated files
 3. Print "Run: snap run <session>" suggestion
+
+### Engineering Principles
+
+All planning prompts (PRD, Technology, Design, Tasks) are guided by shared engineering principles defined in `internal/plan/prompts/principles.md`:
+
+- **KISS** — Prefer simplest solution; avoid premature abstraction, unnecessary indirection, speculative generality
+- **DRY** — Single source of truth; eliminate duplication of decisions and intent
+- **SOLID** — Single responsibility per module; open for extension, closed for modification; substitutable abstractions; narrow interfaces; depend on abstractions
+- **YAGNI** — Build only what's needed now; no hypothetical extension points or configuration for non-existent scenarios
+
+Conflicts resolved in favor of simplicity: straightforward solutions that work today are better than elegant abstractions that anticipate tomorrow.
 
 ## --from Flag
 
