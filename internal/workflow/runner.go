@@ -345,6 +345,14 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 		return false, fmt.Errorf("failed to render ensure-completeness prompt: %w", err)
 	}
 
+	codeReviewPrompt, err := prompts.CodeReview(prompts.CodeReviewData{
+		TaskPath: implementData.TaskPath,
+		TaskID:   implementData.TaskID,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to render code-review prompt: %w", err)
+	}
+
 	steps := []struct {
 		name   string
 		prompt string
@@ -369,7 +377,7 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 		},
 		{
 			name:   "Code review",
-			prompt: prompts.CodeReview(),
+			prompt: codeReviewPrompt,
 			model:  model.Thinking,
 		},
 		{

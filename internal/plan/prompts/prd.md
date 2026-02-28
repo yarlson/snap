@@ -15,7 +15,7 @@ Write an implementation-ready **PRD** for the product described by the repositor
 2. Read docs/context/ files if present (context-map.md, summary.md, terminology.md)
 3. Read any existing product docs, README, or user-facing documentation
 4. Scan the codebase for existing functionality and patterns
-{{- if .Brief}}
+   {{- if .Brief}}
 
 ### Requirements Brief
 

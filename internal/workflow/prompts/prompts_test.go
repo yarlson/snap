@@ -136,7 +136,18 @@ func TestLintAndTest(t *testing.T) {
 }
 
 func TestCodeReview(t *testing.T) {
-	result := prompts.CodeReview()
+	data := prompts.CodeReviewData{
+		TaskPath: "docs/tasks/TASK1.md",
+		TaskID:   "TASK1",
+	}
+	result, err := prompts.CodeReview(data)
+	require.NoError(t, err)
+
+	// Task scope awareness
+	assert.Contains(t, result, "docs/tasks/TASK1.md")
+	assert.Contains(t, result, "TASK1")
+	assert.Contains(t, result, "in scope")
+	assert.Contains(t, result, "out of scope")
 
 	// Context loading (entry prompt)
 	assert.Contains(t, result, "CLAUDE.md")
