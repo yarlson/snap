@@ -50,6 +50,15 @@ func Create(projectRoot, name string) error {
 	return os.MkdirAll(TasksDir(projectRoot, name), 0o755)
 }
 
+// EnsureDefault creates a "default" session if it does not already exist.
+// It is idempotent — calling it when the session already exists is a no-op.
+func EnsureDefault(projectRoot string) error {
+	if Exists(projectRoot, "default") {
+		return nil
+	}
+	return Create(projectRoot, "default")
+}
+
 // Info describes a session's name, task counts, and derived status.
 type Info struct {
 	Name           string

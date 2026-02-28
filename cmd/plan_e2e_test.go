@@ -27,6 +27,49 @@ exit 0
 	return mockBinDir + ":/usr/bin:/bin"
 }
 
+// CUJ-1: Fresh-start planning — snap plan on a project with no sessions.
+func TestE2E_PlanFreshProject(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	binPath := buildSnap(t)
+	projectDir := t.TempDir()
+	ctx := context.Background()
+
+	mockPath := mockPlanProvider(t)
+
+	// Run snap plan on a fresh project with no sessions — should auto-create "default".
+	plan := exec.CommandContext(ctx, binPath, "plan")
+	plan.Dir = projectDir
+	plan.Env = append(os.Environ(), "PATH="+mockPath)
+	plan.Stdin = strings.NewReader("/done\n")
+
+	output, planErr := plan.CombinedOutput()
+	require.NoError(t, planErr, "snap plan (fresh project) failed: %s", output)
+
+	outputStr := string(output)
+
+	// Auto-creation should be silent — no "created" message in output.
+	assert.NotContains(t, outputStr, "created")
+
+	// Planning should proceed with the "default" session.
+	assert.Contains(t, outputStr, "Planning session 'default'")
+	assert.Contains(t, outputStr, "Planning complete")
+
+	// The "default" session directory should exist on disk.
+	defaultSessionDir := filepath.Join(projectDir, ".snap", "sessions", "default")
+	info, err := os.Stat(defaultSessionDir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+
+	// The tasks directory should exist.
+	tasksDir := filepath.Join(defaultSessionDir, "tasks")
+	info, err = os.Stat(tasksDir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
 // CUJ-2: Plan and Implement — plan portion (interactive).
 func TestE2E_CUJ2_PlanInteractive(t *testing.T) {
 	if testing.Short() {

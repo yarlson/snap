@@ -23,15 +23,14 @@ snap runs the loop for you. `snap plan`, `snap run`, walk away. Come back to tes
 # Install
 go install github.com/yarlson/snap@latest
 
-# Create a session and plan your tasks interactively
-snap new my-feature
+# Plan your tasks interactively (creates a session automatically)
 snap plan my-feature
 
 # Let snap implement everything
 snap run my-feature
 ```
 
-That's it. `snap plan` walks you through requirements and generates task files. `snap run` picks them up one by one and implements each to completion.
+That's it. `snap plan` walks you through requirements and generates task files. `snap run` picks them up one by one and implements each to completion. On a fresh project with no sessions, `snap plan` automatically creates a default session.
 
 ### Prerequisites
 
@@ -44,15 +43,16 @@ That's it. `snap plan` walks you through requirements and generates task files. 
 `snap plan` is an interactive session where you describe what you want to build. Chat about your requirements, type `/done`, and snap generates the full planning scaffold: PRD, technology decisions, design doc, and numbered task files.
 
 ```bash
-snap new auth-system
-snap plan auth-system          # Chat about requirements, type /done when ready
-snap run auth-system           # Implements everything
+snap plan my-feature           # Chat about requirements, type /done when ready
+snap run my-feature            # Implements everything
 ```
+
+On a fresh project with no sessions, `snap plan` automatically creates a session. You can also pre-create named sessions with `snap new <name>`.
 
 Or skip the chat and feed a requirements file:
 
 ```bash
-snap plan auth-system --from requirements.md
+snap plan --from requirements.md
 ```
 
 ### Manual task files
@@ -111,7 +111,7 @@ You stay in control without breaking the flow.
 | `snap status [session]` | Show task completion and current step             |
 | `snap delete <name>`    | Delete a session (`--force` to skip confirmation) |
 
-Session argument is optional when only one session exists — snap auto-detects it.
+Session argument is optional: `snap plan` auto-creates a default session if none exist, and auto-detects when exactly one session exists.
 
 ### Flags
 

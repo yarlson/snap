@@ -408,6 +408,51 @@ func TestMarkPlanStarted_Idempotent(t *testing.T) {
 	assert.True(t, HasPlanHistory(root, "auth"))
 }
 
+// --- Unit tests: EnsureDefault ---
+
+func TestEnsureDefault_CreatesWhenAbsent(t *testing.T) {
+	root := t.TempDir()
+
+	err := EnsureDefault(root)
+	require.NoError(t, err)
+
+	// "default" session should now exist.
+	assert.True(t, Exists(root, "default"))
+
+	// Tasks directory should exist.
+	info, err := os.Stat(TasksDir(root, "default"))
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
+func TestEnsureDefault_SucceedsWhenAlreadyExists(t *testing.T) {
+	root := t.TempDir()
+
+	// Create "default" session first.
+	require.NoError(t, Create(root, "default"))
+
+	// EnsureDefault should succeed (idempotent).
+	err := EnsureDefault(root)
+	assert.NoError(t, err)
+}
+
+func TestEnsureDefault_PropagatesOtherErrors(t *testing.T) {
+	// Use a read-only directory to trigger a filesystem error.
+	root := t.TempDir()
+	snapDir := filepath.Join(root, ".snap")
+	require.NoError(t, os.MkdirAll(snapDir, 0o755))
+	require.NoError(t, os.Chmod(snapDir, 0o444))
+	t.Cleanup(func() {
+		//nolint:errcheck // cleanup: restore permissions so t.TempDir can remove it
+		os.Chmod(snapDir, 0o755)
+	})
+
+	err := EnsureDefault(root)
+	require.Error(t, err)
+	// Should NOT contain "already exists" — it's a real error.
+	assert.NotContains(t, err.Error(), "already exists")
+}
+
 // --- Integration tests: Status ---
 
 func TestStatus_WithTasksAndActiveStep(t *testing.T) {
