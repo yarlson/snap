@@ -80,3 +80,7 @@ Produce the rough task list in this conversation. Do NOT write any files to disk
 - Every task must end with a demoable, usable deliverable
 - Do NOT create infrastructure-only tasks that aren't demoable
 - Do NOT defer all validation/testing to later tasks
+
+## Completion
+
+Done when all tasks are listed in the conversation with task number, name, epic/increment type, user-visible outcome, scope bullets, acceptance criteria, dependencies, and risk justification for each.

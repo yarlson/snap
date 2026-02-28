@@ -2,9 +2,7 @@ Write `{{.TasksDir}}/TASKS.md` from the finalized task list in this conversation
 
 ## Context
 
-1. Read CLAUDE.md or AGENTS.md if present — follow all project conventions
-2. Read docs/context/ files if present (context-map.md, summary.md, terminology.md)
-3. Use the finalized task list from the conversation as the sole source of truth for task content
+Use the finalized task list from the conversation as the sole source of truth for task content.
 
 ## Testing & Quality
 

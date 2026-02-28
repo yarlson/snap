@@ -121,8 +121,10 @@ func TestRenderGenerateTaskSummaryPrompt(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, result, ".snap/sessions/auth/tasks/TASKS.md")
-	assert.Contains(t, result, "CLAUDE.md")
-	assert.Contains(t, result, "docs/context/")
+
+	// Continuation prompt — should NOT re-read context already in conversation.
+	assert.NotContains(t, result, "CLAUDE.md")
+	assert.NotContains(t, result, "docs/context/")
 
 	// Sections A through J.
 	for _, section := range []string{"A.", "B.", "C.", "D.", "E.", "F.", "G.", "H.", "I.", "J."} {
@@ -243,7 +245,7 @@ func TestAllPrompts_ContainCodebaseExploration(t *testing.T) {
 		{"Technology", func() (string, error) { return RenderTechnologyPrompt("tasks") }},
 		{"Design", func() (string, error) { return RenderDesignPrompt("tasks") }},
 		{"CreateTasks", func() (string, error) { return RenderCreateTasksPrompt("tasks") }},
-		{"GenerateTaskSummary", func() (string, error) { return RenderGenerateTaskSummaryPrompt("tasks") }},
+		// GenerateTaskSummary is a continuation prompt — context already in conversation.
 		{"GenerateTaskFile", func() (string, error) {
 			return RenderGenerateTaskFilePrompt("tasks", 0, "spec")
 		}},
