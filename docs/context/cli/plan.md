@@ -111,14 +111,11 @@ Planner supports two input modes:
 
 ### Phase 2: Autonomous Document Generation
 
-- Claude generates task files based on brief via a 7-step pipeline:
+- Claude generates task files based on brief via a 4-step pipeline:
   1. **PRD.md** — Product requirements document (features, acceptance criteria, scope)
   2. **TECHNOLOGY.md** and **DESIGN.md** — Technology decisions and design specification (generated in parallel)
-  3. **Task list creation** — Initial rough task breakdown based on PRD, TECHNOLOGY, and DESIGN
-  4. **Task assessment** — Evaluates each task against anti-pattern criteria (horizontal slices, infrastructure-only, too broad, too narrow, non-demoable)
-  5. **Task refinement** — Fixes flagged tasks via merging, splitting, or reworking to create demoable vertical slices
-  6. **TASKS.md generation** — Writes final task summary with sections A–J (overview, assumptions, principles, CUJs, epics, capability map, task list, dependencies, risks, coverage)
-  7. **Task file generation** — Generates individual TASK<N>.md files in parallel batches from task specifications in TASKS.md section G
+  3. **Analyze tasks** — Creates initial task list, assesses against anti-patterns, refines (all in one conversation turn, no files written)
+  4. **Generate tasks** — Writes TASKS.md (sections A–J), then Claude spawns subagents to write individual TASK<N>.md files
 - Each document generated via LLM call with specialized prompt template
 - **Engineering principles preamble**: All Phase 2 prompts are prepended with shared engineering principles (KISS, DRY, SOLID, YAGNI) to guide consistent decision-making across all generated documents
 - Documents written to `.snap/sessions/<session>/tasks/`
@@ -138,43 +135,23 @@ Phase 2 flow:
    - Call LLM executor for both concurrently via errgroup
    - Write TECHNOLOGY.md and DESIGN.md to tasks directory
    - Display individual sub-step completions with timing
-3. **Step 3 (Sequential)**: Create task list
-   - Render create-tasks prompt template (reads PRD, TECHNOLOGY, DESIGN from conversation)
+3. **Step 3 (Sequential)**: Analyze tasks
+   - Render analyze-tasks prompt template (combines create, assess, refine into one prompt)
    - Prepend engineering principles preamble
    - Call LLM executor in fresh conversation (no -c flag)
-   - Produces rough task list in conversation (no files written yet)
+   - Reads PRD, TECHNOLOGY, DESIGN; creates task list; assesses against 5 anti-patterns (horizontal slice, infrastructure-only, too broad, too narrow, non-demoable); refines flagged tasks via merge/absorb/split/rework; performs self-check re-verification
+   - All output stays in conversation (no files written yet)
    - Display step completion
-4. **Step 4 (Sequential)**: Assess tasks
-   - Render assess-tasks prompt template
-   - Call LLM executor with -c flag (continues create-tasks conversation)
-   - No preamble (already in conversation context from step 3)
-   - Scores each task against 5 anti-patterns (horizontal, infrastructure-only, too broad, too narrow, non-demoable)
-   - Output in conversation (no files written yet)
-   - Display step completion
-5. **Step 5 (Sequential)**: Refine tasks
-   - Render merge-tasks prompt template
-   - Call LLM executor with -c flag (continues conversation chain)
-   - No preamble (operates on assessed task list from conversation)
-   - Fixes flagged tasks via merging, splitting, absorbing, or reworking
-   - Performs self-check re-verification against anti-patterns
-   - Output in conversation (no files written yet)
-   - Display step completion
-6. **Step 6 (Sequential)**: Generate task summary
-   - Render generate-task-summary prompt template
+4. **Step 4 (Sequential)**: Generate tasks
+   - Render generate-tasks prompt template
    - Prepend engineering principles preamble
-   - Call LLM executor with -c flag (continues conversation chain)
-   - Write TASKS.md with sections A–J to tasks directory
+   - Call LLM executor with -c flag (continues analyze-tasks conversation)
+   - Claude writes TASKS.md with sections A–J to tasks directory
+   - Claude spawns subagents (via Agent tool) to write individual TASK<N>.md files in parallel
+   - Each subagent inherits full conversation context and writes one task file using the 15-section format
    - Display step completion
-7. **Step 7 (Parallel, Batched)**: Generate task files
-   - Parse TASKS.md section G to extract task specifications via `ExtractTaskSpecs()`
-   - For each task spec, render `generate-task-file.md` prompt template with task number and specification
-   - Prepend engineering principles preamble to each task file prompt
-   - Execute LLM calls in parallel batches (batch size: 5 tasks per batch)
-   - Use `model.Thinking` model type for generating detailed task files
-   - Write TASK<N>.md files to tasks directory for each task
-   - Print individual batch completions with timing and file counts
-8. Print file listing showing all generated files (PRD.md, TECHNOLOGY.md, DESIGN.md, TASKS.md, TASK1.md, TASK2.md, etc.)
-9. Print "Run: snap run <session>" suggestion
+5. Print file listing showing all generated files (PRD.md, TECHNOLOGY.md, DESIGN.md, TASKS.md, TASK0.md, TASK1.md, etc.)
+6. Print "Run: snap run <session>" suggestion
 
 ### Engineering Principles
 

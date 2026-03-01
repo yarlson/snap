@@ -13,10 +13,8 @@ var promptFS embed.FS
 
 // promptData holds template parameters for plan prompt rendering.
 type promptData struct {
-	TasksDir   string
-	Brief      string
-	TaskNumber int
-	TaskSpec   string
+	TasksDir string
+	Brief    string
 }
 
 // RenderPrinciplesPreamble renders the shared engineering principles preamble.
@@ -65,43 +63,18 @@ func RenderDesignPrompt(tasksDir string) (string, error) {
 	return prependPreamble(prompt)
 }
 
-// RenderCreateTasksPrompt renders the initial task list creation prompt.
-func RenderCreateTasksPrompt(tasksDir string) (string, error) {
-	prompt, err := renderTemplate("prompts/create-tasks.md", promptData{TasksDir: tasksDir})
+// RenderAnalyzeTasksPrompt renders the combined task analysis prompt (create + assess + refine).
+func RenderAnalyzeTasksPrompt(tasksDir string) (string, error) {
+	prompt, err := renderTemplate("prompts/analyze-tasks.md", promptData{TasksDir: tasksDir})
 	if err != nil {
 		return "", err
 	}
 	return prependPreamble(prompt)
 }
 
-// RenderAssessTasksPrompt renders the task assessment/scoring prompt.
-// It operates on conversation context and takes no tasksDir parameter.
-func RenderAssessTasksPrompt() (string, error) {
-	return renderTemplate("prompts/assess-tasks.md", promptData{})
-}
-
-// RenderMergeTasksPrompt renders the task merge/split/fix prompt.
-// It operates on conversation context and takes no tasksDir parameter.
-func RenderMergeTasksPrompt() (string, error) {
-	return renderTemplate("prompts/merge-tasks.md", promptData{})
-}
-
-// RenderGenerateTaskSummaryPrompt renders the TASKS.md generation prompt.
-func RenderGenerateTaskSummaryPrompt(tasksDir string) (string, error) {
-	prompt, err := renderTemplate("prompts/generate-task-summary.md", promptData{TasksDir: tasksDir})
-	if err != nil {
-		return "", err
-	}
-	return prependPreamble(prompt)
-}
-
-// RenderGenerateTaskFilePrompt renders the prompt for generating a single TASK<N>.md file.
-func RenderGenerateTaskFilePrompt(tasksDir string, taskNumber int, taskSpec string) (string, error) {
-	prompt, err := renderTemplate("prompts/generate-task-file.md", promptData{
-		TasksDir:   tasksDir,
-		TaskNumber: taskNumber,
-		TaskSpec:   taskSpec,
-	})
+// RenderGenerateTasksPrompt renders the task generation prompt (TASKS.md + TASK<N>.md subagents).
+func RenderGenerateTasksPrompt(tasksDir string) (string, error) {
+	prompt, err := renderTemplate("prompts/generate-tasks.md", promptData{TasksDir: tasksDir})
 	if err != nil {
 		return "", err
 	}

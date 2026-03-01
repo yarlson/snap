@@ -121,14 +121,11 @@ func TestE2E_CUJ2_PlanInteractive(t *testing.T) {
 
 	outputStr := string(output)
 
-	// Assert step headers present (7-step pipeline).
-	assert.Contains(t, outputStr, "Step 1/7")
-	assert.Contains(t, outputStr, "Step 2/7")
-	assert.Contains(t, outputStr, "Step 3/7")
-	assert.Contains(t, outputStr, "Step 4/7")
-	assert.Contains(t, outputStr, "Step 5/7")
-	assert.Contains(t, outputStr, "Step 6/7")
-	assert.Contains(t, outputStr, "Step 7/7")
+	// Assert step headers present (4-step pipeline).
+	assert.Contains(t, outputStr, "Step 1/4")
+	assert.Contains(t, outputStr, "Step 2/4")
+	assert.Contains(t, outputStr, "Step 3/4")
+	assert.Contains(t, outputStr, "Step 4/4")
 
 	// Assert planning complete message.
 	assert.Contains(t, outputStr, "Planning complete")
@@ -176,14 +173,11 @@ func TestE2E_CUJ2_PlanWithFile(t *testing.T) {
 	// Assert --from header.
 	assert.Contains(t, outputStr, "using brief.md as input")
 
-	// Assert step headers (7-step pipeline).
-	assert.Contains(t, outputStr, "Step 1/7")
-	assert.Contains(t, outputStr, "Step 2/7")
-	assert.Contains(t, outputStr, "Step 3/7")
-	assert.Contains(t, outputStr, "Step 4/7")
-	assert.Contains(t, outputStr, "Step 5/7")
-	assert.Contains(t, outputStr, "Step 6/7")
-	assert.Contains(t, outputStr, "Step 7/7")
+	// Assert step headers (4-step pipeline).
+	assert.Contains(t, outputStr, "Step 1/4")
+	assert.Contains(t, outputStr, "Step 2/4")
+	assert.Contains(t, outputStr, "Step 3/4")
+	assert.Contains(t, outputStr, "Step 4/4")
 
 	// Assert planning complete.
 	assert.Contains(t, outputStr, "Planning complete")

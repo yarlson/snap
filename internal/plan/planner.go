@@ -227,15 +227,14 @@ func (p *Planner) gatherRequirementsScanner(ctx context.Context) error {
 }
 
 // generateDocuments runs the autonomous Phase 2 document generation pipeline.
-// Pipeline: PRD (sequential) → TECHNOLOGY + DESIGN (parallel) → 4-step task splitting (sequential)
-// → parallel batched TASK<N>.md generation.
+// Pipeline: PRD (sequential) → TECHNOLOGY + DESIGN (parallel) → Analyze tasks (fresh conversation)
+// → Generate tasks with subagents (-c continuation).
 func (p *Planner) generateDocuments(ctx context.Context) error {
 	fmt.Fprint(p.output, ui.Step("Generating planning documents..."))
 
-	const totalSteps = 7
-	const taskFileBatchSize = 5
+	const totalSteps = 4
 
-	// --- Step 1/7: Generate PRD (sequential) ---
+	// --- Step 1/4: Generate PRD (sequential) ---
 	if ctx.Err() != nil {
 		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 1/%d", totalSteps)))
 		fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
@@ -276,7 +275,7 @@ func (p *Planner) generateDocuments(ctx context.Context) error {
 
 	fmt.Fprintln(p.output, ui.StepComplete("Step complete", time.Since(start)))
 
-	// --- Step 2/7: Generate technology plan + design spec (parallel) ---
+	// --- Step 2/4: Generate technology plan + design spec (parallel) ---
 	if ctx.Err() != nil {
 		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 2/%d", totalSteps)))
 		fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
@@ -328,198 +327,66 @@ func (p *Planner) generateDocuments(ctx context.Context) error {
 		return fmt.Errorf("step 2/%d failed: %s", totalSteps, strings.Join(errs, "; "))
 	}
 
-	// --- Steps 3–6: Multi-pass task splitting (sequential, conversation chain) ---
-	type taskSplitStep struct {
-		num                  int
-		name                 string
-		continueConversation bool   // true → pass -c to continue conversation chain
-		prompt               string // rendered prompt content
-	}
-
-	// Step 3: Create task list — fresh conversation (no -c), preamble included via render function.
-	createPrompt, err := RenderCreateTasksPrompt(p.tasksDir)
-	if err != nil {
-		return fmt.Errorf("failed to render Create task list prompt: %w", err)
-	}
-
-	// Step 4: Assess tasks — continues conversation (-c), no preamble needed (already in context from step 3).
-	assessPrompt, err := RenderAssessTasksPrompt()
-	if err != nil {
-		return fmt.Errorf("failed to render Assess tasks prompt: %w", err)
-	}
-
-	// Step 5: Refine tasks — continues conversation (-c), no preamble needed.
-	mergePrompt, err := RenderMergeTasksPrompt()
-	if err != nil {
-		return fmt.Errorf("failed to render Refine tasks prompt: %w", err)
-	}
-
-	// Step 6: Generate task summary — continues conversation (-c), preamble included via render function.
-	summaryPrompt, err := RenderGenerateTaskSummaryPrompt(p.tasksDir)
-	if err != nil {
-		return fmt.Errorf("failed to render Generate task summary prompt: %w", err)
-	}
-
-	splitSteps := []taskSplitStep{
-		{num: 3, name: "Create task list", continueConversation: false, prompt: createPrompt},
-		{num: 4, name: "Assess tasks", continueConversation: true, prompt: assessPrompt},
-		{num: 5, name: "Refine tasks", continueConversation: true, prompt: mergePrompt},
-		{num: 6, name: "Generate task summary", continueConversation: true, prompt: summaryPrompt},
-	}
-
-	for _, step := range splitSteps {
-		if ctx.Err() != nil {
-			fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step %d/%d", step.num, totalSteps)))
-			fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
-			return ctx.Err()
-		}
-
-		fmt.Fprint(p.output, ui.StepNumbered(step.num, totalSteps, step.name))
-
-		var args []string
-		if step.continueConversation {
-			args = append(args, "-c")
-		}
-		args = append(args, step.prompt)
-
-		start = time.Now()
-		if err := p.executor.Run(ctx, p.output, model.Thinking, args...); err != nil {
-			elapsed := time.Since(start)
-			fmt.Fprintln(p.output, ui.StepFailed("Step failed", elapsed))
-
-			if ctx.Err() != nil {
-				fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step %d/%d", step.num, totalSteps)))
-				fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
-				return ctx.Err()
-			}
-			return fmt.Errorf("step %d/%d %q failed: %w", step.num, totalSteps, step.name, err)
-		}
-
-		fmt.Fprintln(p.output, ui.StepComplete("Step complete", time.Since(start)))
-	}
-
-	// --- Step 7/7: Generate TASK<N>.md files (parallel, batched) ---
+	// --- Step 3/4: Analyze tasks (fresh conversation, no -c) ---
 	if ctx.Err() != nil {
-		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 7/%d", totalSteps)))
+		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 3/%d", totalSteps)))
 		fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
 		return ctx.Err()
 	}
 
-	taskSpecs, err := ExtractTaskSpecs(p.tasksDir)
+	analyzePrompt, err := RenderAnalyzeTasksPrompt(p.tasksDir)
 	if err != nil {
-		return fmt.Errorf("failed to parse TASKS.md for task count: %w", err)
+		return fmt.Errorf("failed to render Analyze tasks prompt: %w", err)
 	}
 
-	fmt.Fprint(p.output, ui.StepNumbered(7, totalSteps, "Generate task files"))
+	fmt.Fprint(p.output, ui.StepNumbered(3, totalSteps, "Analyze tasks"))
 
-	if len(taskSpecs) == 0 {
-		fmt.Fprintln(p.output, ui.StepComplete("0 task files generated", time.Duration(0)))
-	} else if err := p.generateTaskFiles(ctx, taskSpecs, totalSteps, taskFileBatchSize); err != nil {
-		return err
-	}
+	start = time.Now()
+	if err := p.executor.Run(ctx, p.output, model.Thinking, analyzePrompt); err != nil {
+		elapsed := time.Since(start)
+		fmt.Fprintln(p.output, ui.StepFailed("Step failed", elapsed))
 
-	fmt.Fprintln(p.output)
-	fmt.Fprintln(p.output, ui.Complete("Planning complete"))
-
-	return nil
-}
-
-// generateTaskFiles generates TASK<N>.md files in parallel batches.
-func (p *Planner) generateTaskFiles(ctx context.Context, specs []TaskSpec, totalSteps, batchSize int) error {
-	// Build parallel tasks for each spec.
-	var taskFileTasks []parallelTask
-	for _, spec := range specs {
-		prompt, err := RenderGenerateTaskFilePrompt(p.tasksDir, spec.Number, spec.Spec)
-		if err != nil {
-			return fmt.Errorf("failed to render task file prompt for TASK%d: %w", spec.Number, err)
-		}
-		taskFileTasks = append(taskFileTasks, parallelTask{
-			name:      fmt.Sprintf("TASK%d.md", spec.Number),
-			modelType: model.Thinking,
-			args:      []string{prompt},
-		})
-	}
-
-	if len(taskFileTasks) <= batchSize {
-		// Small batch: run all at once, print simple completion line.
-		start := time.Now()
-		results := runParallel(ctx, p.executor, taskFileTasks, batchSize)
-
-		var failures []string
-		for _, r := range results {
-			if r.err != nil {
-				failures = append(failures, fmt.Sprintf("%s: %v", r.name, r.err))
-			}
-		}
-
-		if len(failures) > 0 {
-			fmt.Fprintln(p.output, ui.StepFailed(
-				fmt.Sprintf("%d task files generated", len(taskFileTasks)-len(failures)),
-				time.Since(start),
-			))
-			for _, f := range failures {
-				fmt.Fprintln(p.output, ui.ErrorWithDetails("Task file generation failed", []string{f}))
-			}
-			if ctx.Err() != nil {
-				fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 7/%d", totalSteps)))
-				fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
-				return ctx.Err()
-			}
-			return fmt.Errorf("step 7/%d: %d task file(s) failed: %s", totalSteps, len(failures), strings.Join(failures, "; "))
-		}
-
-		fmt.Fprintln(p.output, ui.StepComplete(
-			fmt.Sprintf("%d task files generated", len(taskFileTasks)),
-			time.Since(start),
-		))
-		return nil
-	}
-
-	// Large batch: split into batches, run sequentially, print batch progress.
-	batches := splitBatches(taskFileTasks, batchSize)
-	var allFailures []string
-
-	for batchIdx, batch := range batches {
 		if ctx.Err() != nil {
-			fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 7/%d", totalSteps)))
+			fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 3/%d", totalSteps)))
 			fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
 			return ctx.Err()
 		}
-
-		firstTask := batchIdx * batchSize
-		lastTask := firstTask + len(batch) - 1
-		batchLabel := fmt.Sprintf("Batch %d/%d (tasks %d\u2013%d)", batchIdx+1, len(batches), firstTask, lastTask)
-
-		start := time.Now()
-		results := runParallel(ctx, p.executor, batch, batchSize)
-
-		var failures []string
-		for _, r := range results {
-			if r.err != nil {
-				failures = append(failures, fmt.Sprintf("%s: %v", r.name, r.err))
-			}
-		}
-
-		if len(failures) > 0 {
-			fmt.Fprintln(p.output, ui.StepFailed(batchLabel, time.Since(start)))
-			for _, f := range failures {
-				fmt.Fprintln(p.output, ui.ErrorWithDetails(batchLabel, []string{f}))
-			}
-			allFailures = append(allFailures, failures...)
-			if ctx.Err() != nil {
-				fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 7/%d", totalSteps)))
-				fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
-				return ctx.Err()
-			}
-			continue
-		}
-
-		fmt.Fprintln(p.output, ui.StepComplete(batchLabel, time.Since(start)))
+		return fmt.Errorf("step 3/%d %q failed: %w", totalSteps, "Analyze tasks", err)
 	}
 
-	if len(allFailures) > 0 {
-		return fmt.Errorf("step 7/%d: %d task file(s) failed: %s", totalSteps, len(allFailures), strings.Join(allFailures, "; "))
+	fmt.Fprintln(p.output, ui.StepComplete("Step complete", time.Since(start)))
+
+	// --- Step 4/4: Generate tasks (-c, continues step 3 conversation) ---
+	if ctx.Err() != nil {
+		fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 4/%d", totalSteps)))
+		fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+		return ctx.Err()
 	}
+
+	generatePrompt, err := RenderGenerateTasksPrompt(p.tasksDir)
+	if err != nil {
+		return fmt.Errorf("failed to render Generate tasks prompt: %w", err)
+	}
+
+	fmt.Fprint(p.output, ui.StepNumbered(4, totalSteps, "Generate tasks"))
+
+	start = time.Now()
+	if err := p.executor.Run(ctx, p.output, model.Thinking, "-c", generatePrompt); err != nil {
+		elapsed := time.Since(start)
+		fmt.Fprintln(p.output, ui.StepFailed("Step failed", elapsed))
+
+		if ctx.Err() != nil {
+			fmt.Fprintln(p.output, ui.Interrupted(fmt.Sprintf("Planning aborted at step 4/%d", totalSteps)))
+			fmt.Fprint(p.output, ui.Info(fmt.Sprintf("  Files written so far are preserved in %s", p.tasksDir)))
+			return ctx.Err()
+		}
+		return fmt.Errorf("step 4/%d %q failed: %w", totalSteps, "Generate tasks", err)
+	}
+
+	fmt.Fprintln(p.output, ui.StepComplete("Step complete", time.Since(start)))
+
+	fmt.Fprintln(p.output)
+	fmt.Fprintln(p.output, ui.Complete("Planning complete"))
 
 	return nil
 }

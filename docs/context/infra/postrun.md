@@ -240,7 +240,7 @@ Used to determine if CI monitoring should proceed after push/PR creation.
 The PR prompt template (`pr.md`) instructs the LLM to:
 
 - Generate a title under 72 characters describing the change
-- Generate a body explaining *why* the changes were made using the PRD for context
+- Generate a body explaining _why_ the changes were made using the PRD for context
 - Output only the PR content (no preamble)
 
 The `PR()` function renders this template with:
@@ -302,4 +302,4 @@ Post-run behavior is automatic and requires no user configuration:
 - If non-GitHub remote: Push succeeds, GitHub features skipped
 - If GitHub remote: Push succeeds, gh CLI pre-validated during startup
 
-The PRD context is passed to the PR generation prompt to create meaningful PR descriptions that explain the *why* behind changes, not just raw diff summaries.
+The PRD context is passed to the PR generation prompt to create meaningful PR descriptions that explain the _why_ behind changes, not just raw diff summaries.
