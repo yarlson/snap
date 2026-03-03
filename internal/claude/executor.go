@@ -276,11 +276,7 @@ func formatTodoToolUse(content ContentBlock) string {
 		header = fmt.Sprintf("TodoWrite (%d todos)", len(todos))
 	}
 
-	var builder strings.Builder
-	builder.WriteString(ui.Tool(header))
-	builder.WriteByte('\n')
-	builder.WriteString(formatTodoList(todos))
-	return builder.String()
+	return ui.Tool(header) + "\n"
 }
 
 func formatTodoToolResult(content ContentBlock, raw json.RawMessage) string {

@@ -94,9 +94,7 @@ func TestStreamParser(t *testing.T) {
 			name:  "parses TodoWrite tool input",
 			input: `{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_todo_1","name":"TodoWrite","input":{"todos":[{"content":"Inspect parser tokenization logic","status":"pending","activeForm":"Inspecting parser tokenization logic"},{"content":"Review parser error handling paths","status":"in_progress","activeForm":"Reviewing parser error handling paths"}]}}]}}`,
 			expectedContent: []string{
-				"🔧 TodoWrite",
-				"[ ] Inspect parser tokenization logic",
-				"[~] Review parser error handling paths",
+				"🔧 TodoWrite (2 todos)",
 			},
 		},
 		{
