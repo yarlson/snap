@@ -25,16 +25,17 @@ Review the changes made in this task and update user-facing documentation if beh
 
 ## Scope
 
-- Only modify documentation files (README.md, docs/, CLI help text, usage examples)
+- Only modify user-facing documentation (README.md, CLI help text, usage examples)
+- **Exclude `docs/context/`** — that is project context for coding agents/LLMs, not user-facing docs
 - Do not modify source code
-- Do not update the memory vault
+- Do not update the project context
 - Do not create new documentation files unless the change clearly warrants it
 
 ## What Does Not Count as User-Facing
 
 - Internal refactors with no external effect
 - Test-only changes
-- Memory vault updates
+- Project context updates
 - Prompt template changes
 - Code style or linting fixes
 

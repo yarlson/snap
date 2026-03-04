@@ -18,7 +18,7 @@
 - Implement ONLY what the task defines — nothing more
 - Do not refactor or modify code outside the task scope
 - Follow patterns already established in the codebase
-- Do not update the memory vault
+- Do not update the project context
 
 ## Process
 

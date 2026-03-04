@@ -18,6 +18,6 @@ Verify {{.TaskID}} is fully implemented by checking every acceptance criterion i
 
 - Only complete work defined by the current task
 - Do not refactor existing code or start the next task
-- Do not update the memory vault
+- Do not update the project context
 
 Done when every acceptance criterion has passing code and tests.

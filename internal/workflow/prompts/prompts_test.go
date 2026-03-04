@@ -26,7 +26,7 @@ func TestImplement_SpecificTask(t *testing.T) {
 	assert.Contains(t, result, "TECHNOLOGY.md")
 	assert.Contains(t, result, "TASKS.md")
 	assert.Contains(t, result, "context-map.md")
-	assert.Contains(t, result, "Do not update the memory vault")
+	assert.Contains(t, result, "Do not update the project context")
 }
 
 func TestImplement_AutoSelect(t *testing.T) {
@@ -40,7 +40,7 @@ func TestImplement_AutoSelect(t *testing.T) {
 	assert.Contains(t, result, "docs/PRD.md")
 	assert.Contains(t, result, "next unimplemented task")
 	assert.NotContains(t, result, "docs/tasks/")
-	assert.Contains(t, result, "Do not update the memory vault")
+	assert.Contains(t, result, "Do not update the project context")
 }
 
 func TestImplement_QualityGuardrails(t *testing.T) {
@@ -264,7 +264,7 @@ func TestMemoryUpdate(t *testing.T) {
 	assert.Contains(t, result, "code is truth")
 
 	// No persona filler or delegation text
-	assert.NotContains(t, result, "You are the Memory Vault curator")
-	assert.NotContains(t, result, "Update the memory vault.")
+	assert.NotContains(t, result, "You are the Project Context curator")
+	assert.NotContains(t, result, "Update the project context.")
 	assert.Equal(t, strings.TrimSpace(result), result)
 }

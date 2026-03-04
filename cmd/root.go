@@ -34,7 +34,7 @@ var rootCmd = &cobra.Command{
 - Validates with linters and tests
 - Reviews code changes
 - Commits changes
-- Updates memory vault
+- Updates project context
 
 Runs continuously until interrupted with Ctrl+C.`,
 	RunE: run,

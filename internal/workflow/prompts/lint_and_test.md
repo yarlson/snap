@@ -12,6 +12,6 @@ Read AGENTS.md (or CLAUDE.md) and all linked docs to discover the project's requ
 
 - Only fix lint errors and test failures — do not refactor or improve unrelated code
 - If a fix requires changing logic, keep it minimal and focused on the failing check
-- Do not update the memory vault
+- Do not update the project context
 
 Done when all linters pass with zero issues and all tests pass.

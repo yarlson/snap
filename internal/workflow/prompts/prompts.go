@@ -120,7 +120,7 @@ func UpdateDocs(data UpdateDocsData) (string, error) {
 // Commit returns the commit prompt.
 func Commit() string { return strings.TrimSpace(commit) }
 
-// MemoryUpdate returns the full embedded memory vault update prompt.
+// MemoryUpdate returns the full embedded project context update prompt.
 func MemoryUpdate() string { return strings.TrimSpace(memoryUpdate) }
 
 // TaskSummaryData holds template parameters for the task-summary prompt.

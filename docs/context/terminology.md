@@ -30,7 +30,7 @@
 
 ## Execution & Control
 
-**Context** — `docs/context/` directory storing project context, conventions, terminology, and architecture decisions persistent across workflow runs.
+**Project Context** — `docs/context/` directory storing project context for coding agents and LLMs: conventions, terminology, and architecture decisions persistent across workflow runs. Not user-facing documentation.
 
 **Provider** — LLM service used to generate implementations (Claude or Codex, set via `SNAP_PROVIDER` env var).
 

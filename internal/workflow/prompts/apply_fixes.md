@@ -13,6 +13,6 @@ Fix all issues identified in the code review.
 
 - Only fix issues raised in the review — do not refactor or improve unrelated code
 - Keep fixes minimal and focused
-- Do not update the memory vault
+- Do not update the project context
 
 Done when all actionable findings from the review are resolved.

@@ -662,10 +662,10 @@ func TestRunner_EmbeddedPrompts(t *testing.T) {
 	assert.Contains(t, capturedPrompts[8], "conventional commit")
 	assert.Contains(t, capturedPrompts[8], "co-author")
 
-	// Step 9: Memory update — full embedded skill, not delegation
+	// Step 9: Context update — full embedded prompt, not delegation
 	assert.Contains(t, capturedPrompts[9], "docs/context/")
 	assert.Contains(t, capturedPrompts[9], "summary.md")
-	assert.NotContains(t, capturedPrompts[9], "Update the memory vault.")
+	assert.NotContains(t, capturedPrompts[9], "Update the project context.")
 
 	// Step 10: Commit memory (same as step 8)
 	assert.Contains(t, capturedPrompts[10], "conventional commit")
