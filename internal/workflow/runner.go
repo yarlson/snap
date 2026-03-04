@@ -413,7 +413,6 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 		{
 			name:   "Update docs",
 			prompt: prompts.UpdateDocs(),
-			args:   []string{"-c"},
 			model:  model.Fast,
 		},
 		{
