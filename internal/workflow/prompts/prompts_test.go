@@ -192,13 +192,26 @@ func TestCommit(t *testing.T) {
 	assert.Equal(t, strings.TrimSpace(result), result)
 }
 
-func TestUpdateDocs(t *testing.T) {
-	result := prompts.UpdateDocs()
+func TestUpdateDocs_WithTask(t *testing.T) {
+	data := prompts.UpdateDocsData{
+		TaskPath: "docs/tasks/TASK1.md",
+		TaskID:   "TASK1",
+	}
+	result, err := prompts.UpdateDocs(data)
+	require.NoError(t, err)
+
+	// Task context injected
+	assert.Contains(t, result, "docs/tasks/TASK1.md")
+	assert.Contains(t, result, "TASK1")
 
 	// Core behavior: diff-based doc update
 	assert.Contains(t, result, "git diff HEAD")
 	assert.Contains(t, result, "README.md")
 	assert.Contains(t, result, "user-facing")
+
+	// Context loading (entry prompt)
+	assert.Contains(t, result, "CLAUDE.md")
+	assert.Contains(t, result, "AGENTS.md")
 
 	// Scope
 	assert.Contains(t, result, "## Scope")
@@ -207,6 +220,19 @@ func TestUpdateDocs(t *testing.T) {
 	// Skip case
 	assert.Contains(t, result, "nothing")
 
+	assert.Equal(t, strings.TrimSpace(result), result)
+}
+
+func TestUpdateDocs_WithoutTask(t *testing.T) {
+	result, err := prompts.UpdateDocs(prompts.UpdateDocsData{})
+	require.NoError(t, err)
+
+	// No task references
+	assert.NotContains(t, result, "docs/tasks/")
+
+	// Core behavior still present
+	assert.Contains(t, result, "git diff HEAD")
+	assert.Contains(t, result, "CLAUDE.md")
 	assert.Equal(t, strings.TrimSpace(result), result)
 }
 

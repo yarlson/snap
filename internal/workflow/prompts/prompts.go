@@ -23,7 +23,7 @@ var codeReview string
 var applyFixes string
 
 //go:embed update_docs.md
-var updateDocs string
+var updateDocsTmpl string
 
 //go:embed commit.md
 var commit string
@@ -98,8 +98,24 @@ func CodeReview(data CodeReviewData) (string, error) {
 // ApplyFixes returns the apply-fixes prompt.
 func ApplyFixes() string { return strings.TrimSpace(applyFixes) }
 
-// UpdateDocs returns the update-docs prompt.
-func UpdateDocs() string { return strings.TrimSpace(updateDocs) }
+// UpdateDocsData holds template parameters for the update-docs prompt.
+type UpdateDocsData struct {
+	TaskPath string // empty when no specific task
+	TaskID   string // empty when no specific task
+}
+
+// UpdateDocs renders the update-docs prompt template with the given data.
+func UpdateDocs(data UpdateDocsData) (string, error) {
+	tmpl, err := template.New("update_docs").Parse(updateDocsTmpl)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(buf.String()), nil
+}
 
 // Commit returns the commit prompt.
 func Commit() string { return strings.TrimSpace(commit) }

@@ -48,8 +48,8 @@ Package `internal/prompts` manages all embedded prompt templates used throughout
 
 **File**: `update_docs.md`
 **Purpose**: Update user-facing documentation based on code changes
-**Parameters**: None (plain string)
-**Function**: `UpdateDocs() string`
+**Parameters**: `UpdateDocsData{TaskPath, TaskID}` (optional — empty when no specific task)
+**Function**: `UpdateDocs(data UpdateDocsData) (string, error)`
 **Usage**: Step 7 of workflow iteration
 
 ### Commit

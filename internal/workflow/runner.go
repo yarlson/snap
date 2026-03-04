@@ -371,6 +371,14 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 		return false, fmt.Errorf("failed to render code-review prompt: %w", err)
 	}
 
+	updateDocsPrompt, err := prompts.UpdateDocs(prompts.UpdateDocsData{
+		TaskPath: implementData.TaskPath,
+		TaskID:   implementData.TaskID,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to render update-docs prompt: %w", err)
+	}
+
 	steps := []struct {
 		name   string
 		prompt string
@@ -412,7 +420,7 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 		},
 		{
 			name:   "Update docs",
-			prompt: prompts.UpdateDocs(),
+			prompt: updateDocsPrompt,
 			model:  model.Fast,
 		},
 		{
