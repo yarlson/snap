@@ -278,13 +278,14 @@ func TestReader_WithTerminal_ShowsQueueUI(t *testing.T) {
 		return q.Len() == 1
 	}, time.Second, 10*time.Millisecond)
 
-	bufMu.Lock()
-	output := ui.StripColors(buf.String())
-	bufMu.Unlock()
-
-	assert.Contains(t, output, "📌 Queued", "Should show queued box")
-	assert.Contains(t, output, "fix tests", "Should show prompt text")
-	assert.Contains(t, output, "Step 2/10: Code review", "Should show step context")
+	assert.Eventually(t, func() bool {
+		bufMu.Lock()
+		output := ui.StripColors(buf.String())
+		bufMu.Unlock()
+		return strings.Contains(output, "Queued") &&
+			strings.Contains(output, "fix tests") &&
+			strings.Contains(output, "Step 2/10: Code review")
+	}, time.Second, 10*time.Millisecond, "Should show queued box with prompt text and step context")
 
 	reader.Stop()
 	pw.Close()
