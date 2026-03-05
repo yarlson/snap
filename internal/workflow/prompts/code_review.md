@@ -143,6 +143,24 @@ Check every changed line against these categories:
 
 If tests are missing for critical paths, list what should be tested.
 
+### Phase 6: UI Compliance (user-facing tasks only)
+
+**Skip this phase** if the task's section 0 says "user-facing: no", or if the UI Deliverables section (section 4) says "N/A", or if no task file is available.
+
+Check the following categories against the task file, DESIGN.md, and `docs/context/` conventions:
+
+**Missing required states** — every UI state listed in task section 4 is implemented; every relevant DESIGN.md state matrix row has corresponding code. Severity: **HIGH**
+
+**Formatting/hierarchy violations** — output formatting matches DESIGN.md contract rules; terminology matches DESIGN.md glossary; information hierarchy follows DESIGN.md patterns. Severity: **HIGH**
+
+**Accessibility failures** — keyboard navigation, color contrast, screen reader compatibility per DESIGN.md requirements. Severity: **CRITICAL**
+
+**Context violations** — implementation follows patterns from `docs/context/`; no silent convention deviation. Severity: **HIGH**
+
+**Task scope mismatch** — task claims N/A for user-facing but code modifies user-visible output. Severity: **HIGH**
+
+**Violation quoting**: when reporting a UI compliance finding, reference the specific DESIGN.md rule or `docs/context/` convention and show the violating code alongside the expected behavior.
+
 ## Decision Policy
 
 - **ALWAYS** use `git diff HEAD` to see all uncommitted changes.
@@ -170,7 +188,7 @@ For every finding, provide:
 
 - **File + line**: exact path and line number (must exist in the diff)
 - **Severity**: `CRITICAL` / `HIGH` / `MEDIUM` / `LOW`
-- **Category**: `security` / `bug` / `logic` / `performance` / `architecture` / `testing`
+- **Category**: `security` / `bug` / `logic` / `performance` / `architecture` / `testing` / `ui-compliance`
 - **Title**: one-line summary
 - **Risk**: what can happen in business terms
 - **Current code vs fix**: show both (before/after)

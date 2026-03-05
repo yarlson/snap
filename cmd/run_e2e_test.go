@@ -468,6 +468,77 @@ func TestE2E_FreshWithSessionState(t *testing.T) {
 		"output should show starting task fresh")
 }
 
+// CUJ-2: Run Catches Missing UI State — verify run flow produces prompts with alignment preamble and UI compliance.
+func TestRunE2E_UICompliance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	binPath := buildSnap(t)
+	projectDir := t.TempDir()
+	ctx := context.Background()
+
+	// Step 1: Create session with a user-facing task file.
+	create := exec.CommandContext(ctx, binPath, "new", "uicheck")
+	create.Dir = projectDir
+	out, err := create.CombinedOutput()
+	require.NoError(t, err, "snap new failed: %s", out)
+
+	sessTasksDir := filepath.Join(projectDir, ".snap", "sessions", "uicheck", "tasks")
+	require.NoError(t, os.WriteFile(
+		filepath.Join(sessTasksDir, "PRD.md"),
+		[]byte("# PRD\nBuild a CLI tool."), 0o600))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(sessTasksDir, "TASK1.md"),
+		[]byte("# TASK1: Add output formatting\n\n## 0. Task Type\nuser-facing: yes\n\n## 4. UI Deliverables\nSuccess and error states.\n"), 0o600))
+
+	// Step 2: Create mock provider that captures all prompts to a file.
+	captureFile := filepath.Join(projectDir, "captured_prompts.txt")
+	mockScript := "#!/bin/sh\necho '---PROMPT_BOUNDARY---' >> '" + captureFile + "'\nfor arg in \"$@\"; do\n  echo \"$arg\" >> '" + captureFile + "'\ndone\nexit 0\n"
+	mockPath := createMockProvider(t, mockScript)
+
+	// Step 3: Run snap run with the mock provider.
+	run := exec.CommandContext(ctx, binPath, "run", "uicheck")
+	run.Dir = projectDir
+	run.Env = append(os.Environ(), "PATH="+mockPath)
+	runOut, runErr := run.CombinedOutput()
+
+	// The run may fail at some step (mock doesn't produce real output),
+	// but it should get far enough to invoke at least the implement and code review steps.
+	_ = runErr
+	_ = runOut
+
+	// Step 4: Read captured prompts and assert content.
+	captured, readErr := os.ReadFile(captureFile)
+	require.NoError(t, readErr, "capture file should exist — mock provider was invoked")
+
+	capturedStr := string(captured)
+
+	// Verify the capture file contains prompts from multiple steps.
+	// Each step invokes the provider, so we should see multiple prompt boundaries.
+	boundaries := strings.Count(capturedStr, "---PROMPT_BOUNDARY---")
+	require.Greater(t, boundaries, 1,
+		"capture file should contain multiple prompt boundaries from different steps")
+
+	// Implement prompt contains Pre-Implementation Alignment (from Task 3).
+	assert.Contains(t, capturedStr, "Pre-Implementation Alignment",
+		"implement prompt should contain pre-implementation alignment preamble")
+
+	// Code review prompt contains Phase 6: UI Compliance.
+	assert.Contains(t, capturedStr, "Phase 6: UI Compliance",
+		"code review prompt should contain UI compliance phase")
+
+	// Code review prompt contains ui-compliance category.
+	assert.Contains(t, capturedStr, "ui-compliance",
+		"code review prompt should contain ui-compliance category")
+
+	// Memory update prompt contains What to Record and What NOT to Record.
+	assert.Contains(t, capturedStr, "What to Record",
+		"memory update prompt should contain What to Record section")
+	assert.Contains(t, capturedStr, "What NOT to Record",
+		"memory update prompt should contain What NOT to Record section")
+}
+
 // Test: resume works across session runs (state persisted correctly).
 func TestE2E_ResumeAcrossSessionRuns(t *testing.T) {
 	if testing.Short() {

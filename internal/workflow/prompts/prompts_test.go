@@ -201,6 +201,18 @@ func TestCodeReview(t *testing.T) {
 	assert.Contains(t, result, "security")
 	assert.Contains(t, result, "Finding")
 	assert.NotContains(t, result, "Use the code-review skill")
+
+	// Phase 6: UI Compliance (M9)
+	assert.Contains(t, result, "Phase 6: UI Compliance")
+	assert.Contains(t, result, "user-facing tasks only")
+	assert.Contains(t, result, "Missing required states")
+	assert.Contains(t, result, "Formatting/hierarchy violations")
+	assert.Contains(t, result, "Accessibility failures")
+	assert.Contains(t, result, "Context violations")
+	assert.Contains(t, result, "ui-compliance")
+	assert.Contains(t, result, "DESIGN.md")
+	assert.Contains(t, result, "violating code")
+
 	assert.Equal(t, strings.TrimSpace(result), result)
 }
 
@@ -297,6 +309,16 @@ func TestMemoryUpdate(t *testing.T) {
 	assert.Contains(t, result, "practices.md")
 	assert.Contains(t, result, "context-map.md")
 	assert.Contains(t, result, "code is truth")
+
+	// What to Record (M10)
+	assert.Contains(t, result, "What to Record")
+	assert.Contains(t, result, "Proven patterns")
+	assert.Contains(t, result, "Rejected anti-patterns")
+
+	// What NOT to Record (M10)
+	assert.Contains(t, result, "What NOT to Record")
+	assert.Contains(t, result, "Speculative")
+	assert.Contains(t, result, "Planned-but-unimplemented")
 
 	// No persona filler or delegation text
 	assert.NotContains(t, result, "You are the Project Context curator")
