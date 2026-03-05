@@ -46,6 +46,9 @@ Package `internal/prompts` manages all embedded prompt templates used throughout
 **Parameters**: None (plain string)
 **Function**: `CodeReview() string`
 **Usage**: Step 4 of workflow iteration
+**Key Sections**:
+- Phases 1–5 — Security, bugs, logic, performance, architecture, testing categories with severity levels (CRITICAL, HIGH, MEDIUM, LOW)
+- **Phase 6: UI Compliance** — Conditional on task's `user-facing: yes/no` flag; validates user-facing implementations against DESIGN.md and `docs/context/` conventions; checks missing required states, formatting/hierarchy violations, accessibility failures, context violations, and task scope mismatches; categories include `ui-compliance` with severity HIGH or CRITICAL
 
 ### Apply Fixes
 
@@ -78,6 +81,10 @@ Package `internal/prompts` manages all embedded prompt templates used throughout
 **Parameters**: None (plain string)
 **Function**: `MemoryUpdate() string`
 **Usage**: Step 9 of workflow iteration
+**Key Sections**:
+- Standard memory vault workflow — identify changes, map to context topics, update terminology, practices, summary, and context-map
+- **What to Record** — Proven patterns (implemented in source code and validated by tests), rejected anti-patterns (patterns considered and deliberately rejected with rationale)
+- **What NOT to Record** — Speculative design intent, planned-but-unimplemented UI conventions, DESIGN.md rules not exercised by code, aspirational standards not yet enforced
 
 ### Task Summary
 

@@ -23,6 +23,13 @@
 - `go test ./...` must pass before any commit
 - No exceptions — these are blocking requirements
 
+**UI Compliance Review — Required for User-Facing Tasks**
+
+- Code review includes Phase 6: UI Compliance validation for all tasks with `user-facing: yes`
+- Validates implementation against DESIGN.md contract rules and `docs/context/` conventions
+- Checks: required UI states, formatting/hierarchy compliance, accessibility requirements, context pattern adherence, task scope alignment
+- Violations reported with category `ui-compliance` at severity HIGH or CRITICAL
+
 ## Dependency Management
 
 - Use `go get package@latest` (never edit `go.mod` directly)
@@ -68,6 +75,12 @@
 - Current state documentation, not change history
 - Updated after major features complete or architectural decisions made
 - No timestamps, commit hashes, or status tracking
+
+**Memory Vault Recording Guidelines**:
+
+- **Record proven patterns**: UI and code patterns implemented in source code AND validated by passing tests; only record patterns with evidence in codebase
+- **Record rejected anti-patterns**: patterns considered during task and deliberately rejected with rationale
+- **Do not record**: speculative design intent, planned-but-unimplemented UI conventions, DESIGN.md rules not yet exercised by code, aspirational standards not yet enforced
 
 **Code conventions**:
 
