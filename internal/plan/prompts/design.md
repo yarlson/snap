@@ -34,6 +34,27 @@ One file `{{.TasksDir}}/DESIGN.md` with:
 - Content patterns — templates with concrete examples for: error messages, success confirmations, help/usage text, empty states, progress/loading indicators, destructive action confirmations, input validation messages
 - Information hierarchy — what gets emphasis in output, how to structure multi-part responses, what to show vs hide by default
 
+**Required sections (all products with user-facing output):**
+
+- Contract rules — every rule phrased as a pass/fail assertion using MUST / MUST NOT:
+  - Terminology rules: "MUST use 'session', MUST NOT use 'workspace'" (with right/wrong examples)
+  - Content/message patterns: "Error messages MUST follow: 'Error: {reason}' to stderr"
+  - Formatting/layout rules: "Headers MUST use bold styling"
+  - Accessibility requirements: "All interactive elements MUST be keyboard-navigable"
+  - Anti-pattern list: "MUST NOT use emoji in error messages"
+  - Cap at 30 rules. Prioritize rules that prevent the most common quality failures.
+
+- UI State Matrix — one row per (flow × state) combination:
+
+  | Flow           | State   | Expected Behavior                    |
+  |----------------|---------|--------------------------------------|
+  | <flow name>    | success | "<exact message or pattern>"         |
+  | <flow name>    | error   | "<exact message or pattern>" stderr  |
+  | <flow name>    | empty   | N/A — <reason> / "<message>"         |
+  | <flow name>    | loading | "<indicator description>"            |
+
+  Auto-generate from PRD core flow and use cases. Include only states that apply.
+
 **Conditional sections (include only if the product has the relevant surface):**
 
 - Output formatting (CLI/TUI) — command output structure, table/list formatting, color and emphasis usage, verbosity levels, machine-readable vs human-readable modes

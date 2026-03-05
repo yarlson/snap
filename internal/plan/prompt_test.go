@@ -17,6 +17,12 @@ func TestRenderRequirementsPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "## Process")
 	assert.Contains(t, prompt, "/done")
 	assert.Contains(t, prompt, "## Completion")
+
+	// UI Surface Awareness (M1).
+	assert.Contains(t, prompt, "UI Surface")
+	assert.Contains(t, prompt, "headless")
+	assert.Contains(t, prompt, "accessibility")
+	assert.Contains(t, prompt, "anti-pattern")
 }
 
 func TestRenderPRDPrompt_WithoutBrief(t *testing.T) {
@@ -64,6 +70,20 @@ func TestRenderDesignPrompt(t *testing.T) {
 	assert.Contains(t, result, "docs/context/")
 	assert.Contains(t, result, "Guardrails")
 	assert.Contains(t, result, "Completion")
+
+	// Contract Rules (M2).
+	assert.Contains(t, result, "Contract")
+	assert.Contains(t, result, "MUST")
+	assert.Contains(t, result, "MUST NOT")
+
+	// UI State Matrix (S2).
+	assert.Contains(t, result, "State Matrix")
+	assert.Contains(t, result, "Flow")
+	assert.Contains(t, result, "Expected Behavior")
+	assert.Contains(t, result, "Auto-generate")
+
+	// Rule cap.
+	assert.Contains(t, result, "30 rules")
 }
 
 func TestRenderAnalyzeTasksPrompt(t *testing.T) {
