@@ -9,10 +9,34 @@ Verify {{.TaskID}} is fully implemented by checking every acceptance criterion i
 
 ## Process
 
-1. For each acceptance criterion in the task, identify which test covers it — if no test maps to a criterion, it is not verified
-2. For each criterion without a covering test, write a failing test at the appropriate layer (E2E, integration, or unit per the task's test plan), then minimal code to pass
-3. Run the full test suite — all tests must pass, including E2E tests from prior tasks
-4. If the task has UI deliverables, capture actual output and verify it matches expected behavior — take terminal screenshots for CLI/TUI, use browser automation (Playwright, Cypress, etc.) for web, use platform UI automation for native apps, or call endpoints for APIs
+### Criterion-to-Evidence Mapping
+
+For every acceptance criterion in the task, identify covering evidence (a passing test or validated artifact). Produce a mapping table:
+
+| # | Criterion | Evidence | Status |
+|---|-----------|----------|--------|
+| 1 | <criterion text> | <test name or artifact> | COVERED / MISSING |
+
+For each criterion with Status = MISSING:
+
+1. Write a failing test at the appropriate layer (E2E, integration, or unit per the task's test plan)
+2. Write minimal code to make the test pass
+3. Update the mapping table entry to COVERED
+
+After all criteria are mapped, run the full test suite — all tests must pass, including E2E tests from prior tasks.
+
+### UI Verification
+
+This section is conditional on the task's user-facing flag. Read section 0 of the task file — if it says "user-facing: no" or the task has no user-facing impact, skip this subsection entirely.
+
+For user-facing tasks:
+
+1. Verify that UI states from section 4 (UI Deliverables) are implemented and tested
+2. Verify that DESIGN.md contract rules applicable to this task are followed
+3. Verify that accessibility requirements from DESIGN.md are met
+4. Capture actual output and verify it matches expected behavior — take terminal screenshots for CLI/TUI, use browser automation (Playwright, Cypress, etc.) for web, use platform UI automation for native apps, or call endpoints for APIs
+
+Any unmapped or failing UI criterion must be addressed: write a failing test, then minimal code to pass.
 
 ## Scope
 

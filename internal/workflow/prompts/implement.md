@@ -13,6 +13,21 @@
 
 {{if .TaskID}}Implement {{.TaskID}} in this run.{{else}}Pick the next unimplemented task and implement only that one.{{end}}
 
+## Pre-Implementation Alignment
+
+Before writing any code, build a constraint checklist in your reasoning (not as output):
+
+1. Read `docs/context/*` — extract applicable conventions, naming patterns, and established practices
+2. If DESIGN.md exists, extract contract rules and UI state matrix entries relevant to this task
+3. Read the current task file — identify the user-facing flag (section 0) and UI deliverables (section 4)
+4. Produce a constraint checklist covering:
+   - naming conventions from `docs/context/practices.md`
+   - UI rules from DESIGN.md applicable to this task
+   - accessibility requirements from DESIGN.md
+   - patterns to follow/avoid from `docs/context/` domain files
+
+**Conflict resolution:** If you detect a conflict between project context and design documents, emit `⚠ Context conflict: <description>` in your reasoning. For established patterns already in the codebase, `docs/context/` context wins. For new patterns introduced by this session, DESIGN.md wins.
+
 ## Scope
 
 - Implement ONLY what the task defines — nothing more

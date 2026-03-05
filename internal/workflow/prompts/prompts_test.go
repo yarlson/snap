@@ -27,6 +27,7 @@ func TestImplement_SpecificTask(t *testing.T) {
 	assert.Contains(t, result, "TASKS.md")
 	assert.Contains(t, result, "context-map.md")
 	assert.Contains(t, result, "Do not update the project context")
+	assert.Contains(t, result, "Pre-Implementation Alignment")
 }
 
 func TestImplement_AutoSelect(t *testing.T) {
@@ -41,6 +42,30 @@ func TestImplement_AutoSelect(t *testing.T) {
 	assert.Contains(t, result, "next unimplemented task")
 	assert.NotContains(t, result, "docs/tasks/")
 	assert.Contains(t, result, "Do not update the project context")
+	assert.Contains(t, result, "Pre-Implementation Alignment")
+}
+
+func TestImplement_PreImplementationAlignment(t *testing.T) {
+	data := prompts.ImplementData{PRDPath: "docs/PRD.md", TaskPath: "docs/tasks/TASK1.md", TaskID: "TASK1"}
+	result, err := prompts.Implement(data)
+	require.NoError(t, err)
+
+	// Section header
+	assert.Contains(t, result, "Pre-Implementation Alignment")
+
+	// Context reading instructions
+	assert.Contains(t, result, "docs/context")
+	assert.Contains(t, result, "DESIGN.md")
+
+	// Constraint checklist
+	assert.Contains(t, result, "constraint checklist")
+	assert.Contains(t, result, "naming conventions")
+	assert.Contains(t, result, "accessibility")
+
+	// Conflict warning format and resolution rules
+	assert.Contains(t, result, "Context conflict")
+	assert.Contains(t, result, "context wins")
+	assert.Contains(t, result, "DESIGN.md wins")
 }
 
 func TestImplement_QualityGuardrails(t *testing.T) {
@@ -114,13 +139,23 @@ func TestEnsureCompleteness(t *testing.T) {
 	assert.Contains(t, result, "fully implemented")
 	assert.Contains(t, result, "docs/tasks/TASK1.md")
 	assert.Contains(t, result, "TASK1")
-	assert.Contains(t, result, "not verified")
 	assert.Contains(t, result, "acceptance criterion")
 	assert.Contains(t, result, "## Context")
 	assert.Contains(t, result, "CLAUDE.md")
 	assert.Contains(t, result, "context-map.md")
 	assert.Contains(t, result, "## Scope")
 	assert.Contains(t, result, "Do not refactor")
+
+	// Criterion-to-Evidence Mapping (M8)
+	assert.Contains(t, result, "Criterion-to-Evidence Mapping")
+	assert.Contains(t, result, "Criterion")
+	assert.Contains(t, result, "Evidence")
+	assert.Contains(t, result, "Status")
+
+	// UI Verification (M7)
+	assert.Contains(t, result, "UI Verification")
+	assert.Contains(t, result, "user-facing")
+
 	assert.Equal(t, strings.TrimSpace(result), result)
 }
 
