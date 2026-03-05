@@ -11,6 +11,12 @@ Package `internal/prompts` manages all embedded prompt templates used throughout
 **Parameters**: `PRDPath`, `TaskPath`, `TaskID`
 **Function**: `Implement(ImplementData) (string, error)`
 **Usage**: Step 1 of workflow iteration
+**Key Sections**:
+- Context — read CLAUDE.md, docs/context/, PRD, TECHNOLOGY.md, DESIGN.md (if present), TASKS.md, task file, and existing code patterns
+- **Pre-Implementation Alignment** — build internal constraint checklist covering naming conventions from `docs/context/practices.md`, UI rules from DESIGN.md, accessibility requirements, and domain patterns; detect conflicts between context and design documents using resolution rule (context wins for established patterns, DESIGN.md wins for new patterns)
+- Scope — implement only what task defines, follow established patterns, do not update project context
+- Process — start with failing E2E/integration test, write minimal code to pass, run full test suite, verify all acceptance criteria met
+- Quality Guardrails — security (no secrets, validate input), reliability (close resources, handle errors), performance (no N+1), simplicity (no premature abstractions), dependencies (prefer stdlib, check active maintenance), architecture (separate business logic from I/O)
 
 ### Ensure Completeness
 
@@ -19,6 +25,11 @@ Package `internal/prompts` manages all embedded prompt templates used throughout
 **Parameters**: `TaskPath`, `TaskID`
 **Function**: `EnsureCompleteness(EnsureCompletenessData) (string, error)`
 **Usage**: Step 2 of workflow iteration
+**Key Sections**:
+- Context — read CLAUDE.md, docs/context/, task file, implementation code and tests
+- **Criterion-to-Evidence Mapping** — for each acceptance criterion, identify covering evidence (passing test or artifact), produce mapping table with columns: criterion text, evidence (test name or artifact), status (COVERED / MISSING); for missing criteria write failing test then minimal code to pass; after all criteria mapped, run full test suite
+- **UI Verification** — conditional on task's `user-facing: yes/no` flag (from task section 0); for user-facing tasks: verify UI states from section 4 (UI Deliverables) are implemented, verify DESIGN.md contract rules applicable to task are followed, verify accessibility requirements from DESIGN.md are met, capture actual output and verify against expected behavior; any unmapped or failing UI criterion must be addressed with failing test then minimal code
+- Scope — complete only current task work, do not refactor or start next task, do not update project context
 
 ### Lint and Test
 
