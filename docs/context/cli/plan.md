@@ -136,10 +136,10 @@ Phase 2 flow:
    - Write TECHNOLOGY.md and DESIGN.md to tasks directory
    - Display individual sub-step completions with timing
 3. **Step 3 (Sequential)**: Analyze tasks
-   - Render analyze-tasks prompt template (combines create, assess, refine into one prompt)
+   - Render analyze-tasks prompt template (combines create, assess, refine, validate into one prompt)
    - Prepend engineering principles preamble
    - Call LLM executor in fresh conversation (no -c flag)
-   - Reads PRD, TECHNOLOGY, DESIGN; creates task list; assesses against 5 anti-patterns (horizontal slice, infrastructure-only, too broad, too narrow, non-demoable); refines flagged tasks via merge/absorb/split/rework; performs self-check re-verification
+   - Reads PRD, TECHNOLOGY, DESIGN; creates task list; assesses against 6 anti-patterns (horizontal slice, infrastructure-only, too broad, too narrow, non-demoable, UI-undefined); refines flagged tasks via merge/absorb/split/rework; validates context alignment with `docs/context/*` constraints; performs self-check re-verification
    - All output stays in conversation (no files written yet)
    - Display step completion
 4. **Step 4 (Sequential)**: Generate tasks
@@ -280,6 +280,7 @@ After successful completion:
   - Session resolution (explicit, auto-detect, errors)
   - File generation and placement
   - Signal interruption behavior
+  - UI contract validation: `TestPlanE2E_UIContract` verifies planning prompts contain UI task sections (anti-pattern #6: UI-Undefined Task, context alignment checks) and analysis output validates DESIGN.md state matrix and contract rule references
 - Conflict guard tests: `cmd/plan_test.go`
   - Uses tap mock pattern: `tap.NewMockReadable()`, `tap.NewMockWritable()`, `tap.SetTermIO(in, out)`
   - Runs `checkPlanConflict` in goroutine, emits keypresses asynchronously with `time.Sleep` for sync

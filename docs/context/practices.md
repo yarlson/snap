@@ -9,6 +9,14 @@
 - Refactor if needed
 - All tests must pass before committing
 
+**UI Contract Validation — Required for User-Facing Features**
+
+- User-facing tasks must include concrete UI deliverables in task section 4
+- UI deliverables must reference DESIGN.md state matrix (success, error, empty, loading states)
+- UI deliverables must reference DESIGN.md contract rules (MUST/MUST NOT assertions on formatting, terminology, accessibility)
+- Acceptance criteria for user-facing tasks must include UI-specific pass/fail assertions tied to DESIGN.md
+- Prevents "UI-Undefined Task" anti-pattern during planning phase
+
 **Quality Checks — Required**
 
 - `golangci-lint run` must show 0 issues before any commit

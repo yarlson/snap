@@ -60,6 +60,12 @@
 
 **UI State Matrix** — Table in DESIGN.md with one row per (flow × state) combination, showing expected behavior or message for each state (success, error, empty, loading). Auto-generated from PRD core flow and use cases. Defines exactly what output the user sees in each scenario, enabling consistent behavior across all flows.
 
+**UI-Undefined Task** — Anti-pattern #6 detected during task analysis. A task has user-facing impact (modifies terminal output, user-visible messages, or interactive prompts) but lacks concrete UI deliverables or measurable UI acceptance criteria. Section 4 (UI Deliverables) is empty/vague, and section 11 (Acceptance Criteria) has no UI-specific pass/fail assertions. Verdict: REWORK to include concrete UI specifications tied to DESIGN.md contract rules and state matrix.
+
+**Context Alignment Check** — Validation step during task analysis that compares each task's scope against `docs/context/*` constraints (practices.md, terminology.md, domain files). Ensures tasks don't silently diverge from established project conventions. Tasks can either follow existing conventions or include updating `docs/context/` as part of their scope.
+
+**User-facing flag** — Binary indicator (yes/no) in task specification section 0 that denotes whether a task produces user-visible output. Used to filter tasks requiring UI deliverables and DESIGN.md compliance from infrastructure-only tasks.
+
 **Plan marker** — Hidden file `.plan-started` created in session directory when plan command starts, used for session status tracking to distinguish planning-in-progress from completed planning.
 
 **Planning Artifacts** — Generated planning documents stored in a session's tasks directory: TASK\*.md (task files), PRD.md (product requirements), TECHNOLOGY.md (technology decisions), DESIGN.md (design specifications). Detected by `HasArtifacts()` function to prevent accidental overwriting.

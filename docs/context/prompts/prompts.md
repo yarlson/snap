@@ -108,16 +108,28 @@ Package `internal/plan` manages prompt templates used in the two-phase planning 
 ### Analyze Tasks Prompt
 
 **File**: `internal/plan/prompts/analyze_tasks.md`
-**Purpose**: Create task list from PRD, assess against anti-patterns, refine via merge/split/rework
+**Purpose**: Create task list from PRD, assess against anti-patterns, refine via merge/split/rework, validate context alignment
 **Usage**: Phase 2 Step 3; runs in fresh conversation to analyze PRD, TECHNOLOGY, DESIGN
-**Process**: Create initial task list, assess against 5 anti-patterns (horizontal slice, infrastructure-only, too broad, too narrow, non-demoable), refine flagged tasks, self-check verification
+**Process**: Create initial task list, assess against 6 anti-patterns (horizontal slice, infrastructure-only, too broad, too narrow, non-demoable, UI-undefined), refine flagged tasks, verify context alignment with `docs/context/*` constraints, self-check verification
+**Anti-patterns**:
+- Anti-pattern #1: Horizontal Slice — single technical layer only, no user-visible outcome (verdict: MERGE)
+- Anti-pattern #2: Infrastructure/Docs-Only — purely setup/tooling/config/docs, no user outcome (verdict: ABSORB)
+- Anti-pattern #3: Too Broad — multiple user flows, outcome needs multiple sentences, >7 criteria (verdict: SPLIT)
+- Anti-pattern #4: Too Narrow — not independently demoable, trivially small, <3 scope bullets (verdict: MERGE)
+- Anti-pattern #5: Non-Demoable — no visible/observable outcome, refactoring/library migration only (verdict: REWORK)
+- Anti-pattern #6: UI-Undefined Task — user-facing impact but lacks concrete UI deliverables or measurable UI criteria tied to DESIGN.md (verdict: REWORK)
+**Context Alignment**: After anti-pattern assessment, each task is compared against `docs/context/*` constraints (practices.md, terminology.md, domain files) to prevent silent divergence from established conventions. Tasks either follow existing patterns or include `docs/context/` updates as deliverables.
 
 ### Generate Tasks Prompt
 
 **File**: `internal/plan/prompts/generate_tasks.md`
-**Purpose**: Generate TASKS.md summary and individual TASK<N>.md files
+**Purpose**: Generate TASKS.md summary and individual TASK<N>.md files with UI contract validation
 **Usage**: Phase 2 Step 4; continues analyze-tasks conversation via `-c` flag
 **Process**: Write TASKS.md with sections A–J, spawn subagents to write TASK<N>.md files in parallel; each subagent inherits full conversation context
+**Key Updates**:
+- Section 0 (Task Type and Placement): Includes `user-facing: yes/no` flag to classify task visibility
+- Section 4 (UI Deliverables): For user-facing tasks, specifies UI states tied to DESIGN.md state matrix, formatting/content rules referencing DESIGN.md contract rules, accessibility checks, and validation method. For non-user-facing tasks: `N/A — no user-facing output` with rationale
+- Section 11 (Acceptance Criteria): User-facing tasks MUST include UI-specific criteria tied to DESIGN.md rules and state matrix entries, ensuring measurable UI validation
 
 ## Implementation Pattern
 
