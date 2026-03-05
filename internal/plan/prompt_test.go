@@ -120,6 +120,17 @@ func TestRenderAnalyzeTasksPrompt(t *testing.T) {
 	assert.Contains(t, result, "SPLIT")
 	assert.Contains(t, result, "REWORK")
 
+	// Anti-pattern #6: UI-Undefined Task (M3).
+	assert.Contains(t, result, "UI-Undefined Task")
+	assert.Contains(t, result, "user-facing impact")
+	assert.Contains(t, result, "6 anti-patterns")
+
+	// Context Alignment Check (M5).
+	assert.Contains(t, result, "Context Alignment Check")
+	assert.Contains(t, result, "docs/context/*")
+	assert.Contains(t, result, "Aligned")
+	assert.Contains(t, result, "Conflicting")
+
 	// Refinement from merge-tasks.
 	assert.Contains(t, result, "Re-verify")
 
@@ -153,6 +164,18 @@ func TestRenderGenerateTasksPrompt(t *testing.T) {
 	// Context loading for subagents.
 	assert.Contains(t, result, "CLAUDE.md")
 	assert.Contains(t, result, "docs/context/")
+
+	// User-facing flag in section 0 (S3).
+	assert.Contains(t, result, "user-facing: yes/no")
+
+	// UI deliverables in section 4 (M4).
+	assert.Contains(t, result, "DESIGN.md state matrix")
+	assert.Contains(t, result, "DESIGN.md contract rules")
+	assert.Contains(t, result, "N/A")
+	assert.Contains(t, result, "no user-facing output")
+
+	// UI acceptance criteria in section 11 (M4).
+	assert.Contains(t, result, "UI-specific criteria")
 
 	// Guardrails.
 	assert.Contains(t, result, "Guardrails")

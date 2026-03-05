@@ -63,7 +63,7 @@ Deviate from this order only if the docs force it — explain why explicitly, pr
 
 ## Anti-Pattern Assessment
 
-After creating the initial task list, evaluate every task against these 5 anti-patterns. For each task, state a verdict and brief rationale.
+After creating the initial task list, evaluate every task against these 6 anti-patterns. For each task, state a verdict and brief rationale.
 
 ### 1. Horizontal Slice
 
@@ -105,6 +105,14 @@ The task cannot be demonstrated to a non-technical user. There is no visible, ob
 
 **Verdict:** REWORK
 
+### 6. UI-Undefined Task
+
+The task has user-facing impact but lacks concrete UI deliverables or measurable UI acceptance criteria. The task modifies terminal output, user-visible messages, or interactive prompts, but section 4 (UI Deliverables) is empty or vague, and section 11 (Acceptance Criteria) has no UI-specific pass/fail assertions.
+
+**Examples:** "Add session management CLI commands" with no specification of output format, error messages, or success confirmations. "Implement status display" with no defined states (loading, empty, error, success) or formatting rules.
+
+**Verdict:** REWORK
+
 ## Refinement
 
 For every non-PASS verdict, apply the indicated action:
@@ -117,8 +125,17 @@ For every non-PASS verdict, apply the indicated action:
 After applying all actions:
 
 1. Re-number tasks sequentially
-2. **Self-check pass**: Re-verify each modified task against the same 5 anti-pattern criteria. If any modified task still fails, fix it.
+2. **Self-check pass**: Re-verify each modified task against the same 6 anti-pattern criteria. If any modified task still fails, fix it.
 3. Update dependencies and sequencing to reflect the new task list
+
+## Context Alignment Check
+
+After the anti-pattern assessment and refinement, compare each task's scope against `docs/context/*` constraints (practices.md, terminology.md, and domain files). For each task:
+
+- **Aligned**: The task's scope, naming, and patterns are consistent with established project conventions. Proceed without changes.
+- **Conflicting**: The task introduces patterns, terminology, or conventions that diverge from `docs/context/` constraints. Annotate the task with explicit context migration/update work as an additional deliverable — the task must either follow the existing convention or include updating `docs/context/` as part of its scope.
+
+No silent divergence from established project conventions is permitted.
 
 ## Output
 
@@ -147,7 +164,8 @@ Produce the task list in this conversation only. Do NOT write any files to disk.
 Done when:
 
 1. All tasks are listed in the conversation with full details
-2. Every task has been assessed against 5 anti-patterns
+2. Every task has been assessed against 6 anti-patterns
 3. All non-PASS tasks have been refined (merged/absorbed/split/reworked)
-4. Self-check pass confirms no remaining anti-pattern violations
-5. Tasks are re-numbered sequentially with updated dependencies
+4. Context alignment check completed for all tasks
+5. Self-check pass confirms no remaining anti-pattern violations
+6. Tasks are re-numbered sequentially with updated dependencies

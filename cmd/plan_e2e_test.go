@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	planpkg "github.com/yarlson/snap/internal/plan"
 )
 
 // mockPlanProvider creates a mock claude script that accepts any args and exits 0.
@@ -345,6 +347,53 @@ func TestE2E_PlanConflictNonTTY(t *testing.T) {
 	assert.Contains(t, outputStr, "snap delete auth")
 	assert.Contains(t, outputStr, "snap new")
 	assert.Contains(t, outputStr, "snap plan")
+}
+
+// CUJ-1: Plan CLI Feature with UI Contract — verifies planning prompts contain UI task sections.
+func TestPlanE2E_UIContract(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test in short mode")
+	}
+
+	binPath := buildSnap(t)
+	projectDir := t.TempDir()
+	ctx := context.Background()
+
+	mockPath := mockPlanProvider(t)
+	tasksDir := filepath.Join(projectDir, ".snap", "sessions", "default", "tasks")
+
+	// Run snap plan — should complete without error.
+	plan := exec.CommandContext(ctx, binPath, "plan")
+	plan.Dir = projectDir
+	plan.Env = append(os.Environ(), "PATH="+mockPath, "MOCK_TASKS_DIR="+tasksDir)
+	plan.Stdin = strings.NewReader("/done\n")
+
+	output, planErr := plan.CombinedOutput()
+	require.NoError(t, planErr, "snap plan failed: %s", output)
+	assert.Contains(t, string(output), "Planning complete")
+
+	// Verify analyze-tasks prompt contains UI anti-pattern and context alignment.
+	analyzePrompt, err := renderAnalyzeTasksForTest(tasksDir)
+	require.NoError(t, err)
+	assert.Contains(t, analyzePrompt, "UI-Undefined Task")
+	assert.Contains(t, analyzePrompt, "Context Alignment Check")
+
+	// Verify generate-tasks prompt contains user-facing flag and UI deliverables.
+	generatePrompt, err := renderGenerateTasksForTest(tasksDir)
+	require.NoError(t, err)
+	assert.Contains(t, generatePrompt, "user-facing: yes/no")
+	assert.Contains(t, generatePrompt, "DESIGN.md state matrix")
+	assert.Contains(t, generatePrompt, "DESIGN.md contract rules")
+}
+
+// renderAnalyzeTasksForTest calls the plan package's render function for E2E verification.
+func renderAnalyzeTasksForTest(tasksDir string) (string, error) {
+	return planpkg.RenderAnalyzeTasksPrompt(tasksDir)
+}
+
+// renderGenerateTasksForTest calls the plan package's render function for E2E verification.
+func renderGenerateTasksForTest(tasksDir string) (string, error) {
+	return planpkg.RenderGenerateTasksPrompt(tasksDir)
 }
 
 // Test: snap plan with multiple sessions and no name shows error.

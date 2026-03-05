@@ -54,18 +54,18 @@ Use this 15-section format (sections 0–14):
 
 | Section                                      | Content                                                                          |
 | -------------------------------------------- | -------------------------------------------------------------------------------- |
-| 0. Task Type and Placement                   | Epic assignment, dependency rationale, risk level                                |
+| 0. Task Type and Placement                   | Epic assignment, dependency rationale, risk level, user-facing: yes/no           |
 | 1. User Value / Demo Outcome                 | One-paragraph description of user-visible value                                  |
 | 2. Scope (In)                                | 3–10 bullets of what this task delivers                                          |
 | 3. Out of Scope                              | What is explicitly excluded                                                      |
-| 4. UI Deliverables                           | Terminal output, formatting, user-facing display changes                         |
+| 4. UI Deliverables                           | For user-facing tasks: specific UI states tied to DESIGN.md state matrix, formatting/content rules referencing DESIGN.md contract rules, accessibility checks, validation method. For non-user-facing tasks: `N/A — no user-facing output` with rationale explaining why |
 | 5. Domain/Logic Deliverables                 | New/modified files, functions, types, business logic                             |
 | 6. Persistence Deliverables                  | State files, database changes, file I/O                                          |
 | 7. Integration Deliverables                  | API contracts, interface changes, cross-module wiring                            |
 | 8. Validation/Safety/Compliance Deliverables | Input validation, error handling, security considerations                        |
 | 9. Test Plan                                 | Integration tests, unit tests, E2E tests with specific test names and assertions |
 | 10. Tooling/Build/CI Gates Impacted          | Lint, test commands, CI workflow changes                                         |
-| 11. Acceptance Criteria                      | Checkboxed list of measurable completion criteria                                |
+| 11. Acceptance Criteria                      | Checkboxed list of measurable completion criteria. User-facing tasks MUST include UI-specific criteria tied to DESIGN.md rules and state matrix entries |
 | 12. Demo Script                              | Step-by-step instructions to demonstrate the task is complete                    |
 | 13. Rollback Plan                            | How to revert this task's changes                                                |
 | 14. Follow-ups Unlocked                      | What subsequent tasks or capabilities this enables                               |
