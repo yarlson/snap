@@ -12,7 +12,7 @@ Index of all project context files. Updated when new domains or files are added.
 
 LLM prompt templates and rendering functions.
 
-- [`prompts/prompts.md`](prompts/prompts.md) — Embedded prompt templates (Implement, Ensure Completeness, Lint and Test, Code Review, Apply Fixes, Update Docs, Commit, Memory Update, Task Summary); template pattern; integration points
+- [`prompts/prompts.md`](prompts/prompts.md) — Workflow prompts (Implement, Ensure Completeness, Lint and Test, Code Review, Apply Fixes, Update Docs, Commit, Memory Update, Task Summary); planning prompts (Requirements with UI Surface Awareness, Design with Contract Rules and UI State Matrix, Analyze Tasks, Generate Tasks); template pattern; integration points
 
 ## Domain: UI
 

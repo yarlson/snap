@@ -54,6 +54,12 @@
 
 **Principles Preamble** — The prepended engineering principles text added to all Phase 2 plan prompts (PRD, Technology, Design, Tasks). Guides LLM decision-making consistently across all generated planning documents. Defined in `internal/plan/prompts/principles.md`.
 
+**UI Surface Awareness** — Set of clarifying questions in Phase 1 requirements gathering that ensures the planning process accounts for user-facing output characteristics. Asks about primary UI surface (CLI/TUI/Web/API output), states that must be handled (success, error, empty, loading), accessibility requirements (keyboard navigation, contrast, screen reader), terminal width/viewport expectations, and UI anti-pattern preferences. Confirms if project is headless or API-only to skip UI questions if appropriate.
+
+**Contract Rules** — Testable assertions in DESIGN.md phrased as MUST / MUST NOT statements covering: terminology rules (which terms to use/avoid), content and message patterns, formatting and layout rules, accessibility requirements, and anti-patterns. Capped at 30 rules prioritizing prevention of most common quality failures. Enables verification that generated content conforms to design language.
+
+**UI State Matrix** — Table in DESIGN.md with one row per (flow × state) combination, showing expected behavior or message for each state (success, error, empty, loading). Auto-generated from PRD core flow and use cases. Defines exactly what output the user sees in each scenario, enabling consistent behavior across all flows.
+
 **Plan marker** — Hidden file `.plan-started` created in session directory when plan command starts, used for session status tracking to distinguish planning-in-progress from completed planning.
 
 **Planning Artifacts** — Generated planning documents stored in a session's tasks directory: TASK\*.md (task files), PRD.md (product requirements), TECHNOLOGY.md (technology decisions), DESIGN.md (design specifications). Detected by `HasArtifacts()` function to prevent accidental overwriting.
