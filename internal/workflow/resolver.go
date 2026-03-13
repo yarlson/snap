@@ -28,7 +28,7 @@ type startupTarget struct {
 // Returns an error with recovery guidance for inconsistent state.
 // The returned target includes scanned tasks when resuming, which can be reused to
 // avoid redundant directory scans by the caller.
-func resolveStartup(workflowState *state.State, tasksDir string, totalSteps int) (*startupTarget, error) {
+func resolveStartup(workflowState *state.State, tasksDir, taskFilePath string, totalSteps int) (*startupTarget, error) {
 	if workflowState == nil || workflowState.CurrentTaskID == "" {
 		return &startupTarget{action: actionSelect}, nil
 	}
@@ -36,7 +36,7 @@ func resolveStartup(workflowState *state.State, tasksDir string, totalSteps int)
 	// Active task exists — validate for resume.
 
 	// Scan tasks directory to verify active task file still exists.
-	tasks, err := ScanTasks(tasksDir)
+	tasks, err := discoverTasks(tasksDir, taskFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan tasks for resume validation: %w", err)
 	}
@@ -53,9 +53,13 @@ func resolveStartup(workflowState *state.State, tasksDir string, totalSteps int)
 		}
 	}
 	if !found {
+		location := tasksDir
+		if taskFilePath != "" {
+			location = taskFilePath
+		}
 		return nil, fmt.Errorf(
 			"active task %s not found in %s (file may have been deleted or renamed); use --fresh to reset or --show-state to inspect",
-			workflowState.CurrentTaskID, tasksDir,
+			workflowState.CurrentTaskID, location,
 		)
 	}
 
@@ -85,4 +89,11 @@ func resolveStartup(workflowState *state.State, tasksDir string, totalSteps int)
 		step:     workflowState.CurrentStep,
 		tasks:    tasks,
 	}, nil
+}
+
+func discoverTasks(tasksDir, taskFilePath string) ([]TaskInfo, error) {
+	if taskFilePath != "" {
+		return ScanSingleTask(taskFilePath)
+	}
+	return ScanTasks(tasksDir)
 }

@@ -17,6 +17,7 @@ var Version = "dev"
 var (
 	tasksDir   string
 	prdPath    string
+	taskFile   string
 	freshStart bool
 	showState  bool
 	jsonOutput bool
@@ -29,7 +30,7 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	Long: `snap automates the task-by-task implementation workflow:
-- Reads next unimplemented task from PRD
+- Reads the next task from session/task files, or a single task file
 - Implements the task
 - Validates with linters and tests
 - Reviews code changes
@@ -45,6 +46,7 @@ func init() {
 	rootCmd.SetVersionTemplate("snap {{.Version}}\n")
 
 	rootCmd.PersistentFlags().StringVarP(&tasksDir, "tasks-dir", "d", "docs/tasks", "Directory containing PRD and task files")
+	rootCmd.Flags().StringVar(&taskFile, "task-file", "", "Path to a single task file to run")
 	rootCmd.Flags().StringVarP(&prdPath, "prd", "p", "", "Path to PRD file (default: <tasks-dir>/PRD.md)")
 	rootCmd.Flags().BoolVar(&freshStart, "fresh", false, "Force fresh start, ignore existing state")
 	rootCmd.Flags().BoolVar(&showState, "show-state", false, "Show current state and exit")

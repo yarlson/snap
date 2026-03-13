@@ -12,7 +12,8 @@ Package `internal/prompts` manages all embedded prompt templates used throughout
 **Function**: `Implement(ImplementData) (string, error)`
 **Usage**: Step 1 of workflow iteration
 **Key Sections**:
-- Context — read CLAUDE.md, docs/context/, PRD, TECHNOLOGY.md, DESIGN.md (if present), TASKS.md, task file, and existing code patterns
+
+- Context — read CLAUDE.md, docs/context/, task file, and existing code patterns; read PRD when provided, and TECHNOLOGY.md / DESIGN.md / TASKS.md if present
 - **Pre-Implementation Alignment** — build internal constraint checklist covering naming conventions from `docs/context/practices.md`, UI rules from DESIGN.md, accessibility requirements, and domain patterns; detect conflicts between context and design documents using resolution rule (context wins for established patterns, DESIGN.md wins for new patterns)
 - Scope — implement only what task defines, follow established patterns, do not update project context
 - Process — start with failing E2E/integration test, write minimal code to pass, run full test suite, verify all acceptance criteria met
@@ -26,6 +27,7 @@ Package `internal/prompts` manages all embedded prompt templates used throughout
 **Function**: `EnsureCompleteness(EnsureCompletenessData) (string, error)`
 **Usage**: Step 2 of workflow iteration
 **Key Sections**:
+
 - Context — read CLAUDE.md, docs/context/, task file, implementation code and tests
 - **Criterion-to-Evidence Mapping** — for each acceptance criterion, identify covering evidence (passing test or artifact), produce mapping table with columns: criterion text, evidence (test name or artifact), status (COVERED / MISSING); for missing criteria write failing test then minimal code to pass; after all criteria mapped, run full test suite
 - **UI Verification** — conditional on task's `user-facing: yes/no` flag (from task section 0); for user-facing tasks: verify UI states from section 4 (UI Deliverables) are implemented, verify DESIGN.md contract rules applicable to task are followed, verify accessibility requirements from DESIGN.md are met, capture actual output and verify against expected behavior; any unmapped or failing UI criterion must be addressed with failing test then minimal code
@@ -47,6 +49,7 @@ Package `internal/prompts` manages all embedded prompt templates used throughout
 **Function**: `CodeReview() string`
 **Usage**: Step 4 of workflow iteration
 **Key Sections**:
+
 - Phases 1–5 — Security, bugs, logic, performance, architecture, testing categories with severity levels (CRITICAL, HIGH, MEDIUM, LOW)
 - **Phase 6: UI Compliance** — Conditional on task's `user-facing: yes/no` flag; validates user-facing implementations against DESIGN.md and `docs/context/` conventions; checks missing required states, formatting/hierarchy violations, accessibility failures, context violations, and task scope mismatches; categories include `ui-compliance` with severity HIGH or CRITICAL
 
@@ -82,6 +85,7 @@ Package `internal/prompts` manages all embedded prompt templates used throughout
 **Function**: `MemoryUpdate() string`
 **Usage**: Step 9 of workflow iteration
 **Key Sections**:
+
 - Standard memory vault workflow — identify changes, map to context topics, update terminology, practices, summary, and context-map
 - **What to Record** — Proven patterns (implemented in source code and validated by tests), rejected anti-patterns (patterns considered and deliberately rejected with rationale)
 - **What NOT to Record** — Speculative design intent, planned-but-unimplemented UI conventions, DESIGN.md rules not exercised by code, aspirational standards not yet enforced
@@ -105,6 +109,7 @@ Package `internal/plan` manages prompt templates used in the two-phase planning 
 **Purpose**: Guide Phase 1 interactive requirements gathering with focused questions
 **Usage**: Phase 1 of `snap plan` command; asks clarifying questions about the feature being planned
 **Key Sections**:
+
 - Context — instruct Claude to read CLAUDE.md, docs/context/, scan codebase
 - Process — ask focused questions one or two at a time, build on prior answers
 - UI Surface Awareness — ask about primary UI surface (CLI/TUI/Web/API), states to handle (success, error, empty, loading), accessibility requirements, terminal width/viewport expectations, UI anti-patterns to avoid; confirm if headless/API-only
@@ -117,6 +122,7 @@ Package `internal/plan` manages prompt templates used in the two-phase planning 
 **Purpose**: Generate DESIGN.md document with design language and content standards
 **Usage**: Phase 2 of `snap plan` command (TECHNOLOGY.md and DESIGN.md generated concurrently)
 **Key Sections**:
+
 - Approach — define communication patterns, not just features; adapt depth to product surface; ground decisions in target user
 - Context — read CLAUDE.md, docs/context/, PRD.md, TECHNOLOGY.md (if exists), scan codebase for patterns
 - Output — required sections for all products (Voice & tone, User-facing terminology, Content patterns, Information hierarchy); required sections for user-facing output (Contract rules, UI State Matrix); conditional sections (Output formatting, Layout & navigation, Visual system, Interaction patterns, Accessibility, Responsive behavior)
@@ -130,13 +136,14 @@ Package `internal/plan` manages prompt templates used in the two-phase planning 
 **Usage**: Phase 2 Step 3; runs in fresh conversation to analyze PRD, TECHNOLOGY, DESIGN
 **Process**: Create initial task list, assess against 6 anti-patterns (horizontal slice, infrastructure-only, too broad, too narrow, non-demoable, UI-undefined), refine flagged tasks, verify context alignment with `docs/context/*` constraints, self-check verification
 **Anti-patterns**:
+
 - Anti-pattern #1: Horizontal Slice — single technical layer only, no user-visible outcome (verdict: MERGE)
 - Anti-pattern #2: Infrastructure/Docs-Only — purely setup/tooling/config/docs, no user outcome (verdict: ABSORB)
 - Anti-pattern #3: Too Broad — multiple user flows, outcome needs multiple sentences, >7 criteria (verdict: SPLIT)
 - Anti-pattern #4: Too Narrow — not independently demoable, trivially small, <3 scope bullets (verdict: MERGE)
 - Anti-pattern #5: Non-Demoable — no visible/observable outcome, refactoring/library migration only (verdict: REWORK)
 - Anti-pattern #6: UI-Undefined Task — user-facing impact but lacks concrete UI deliverables or measurable UI criteria tied to DESIGN.md (verdict: REWORK)
-**Context Alignment**: After anti-pattern assessment, each task is compared against `docs/context/*` constraints (practices.md, terminology.md, domain files) to prevent silent divergence from established conventions. Tasks either follow existing patterns or include `docs/context/` updates as deliverables.
+  **Context Alignment**: After anti-pattern assessment, each task is compared against `docs/context/*` constraints (practices.md, terminology.md, domain files) to prevent silent divergence from established conventions. Tasks either follow existing patterns or include `docs/context/` updates as deliverables.
 
 ### Generate Tasks Prompt
 
@@ -145,6 +152,7 @@ Package `internal/plan` manages prompt templates used in the two-phase planning 
 **Usage**: Phase 2 Step 4; continues analyze-tasks conversation via `-c` flag
 **Process**: Write TASKS.md with sections A–J, spawn subagents to write TASK<N>.md files in parallel; each subagent inherits full conversation context
 **Key Updates**:
+
 - Section 0 (Task Type and Placement): Includes `user-facing: yes/no` flag to classify task visibility
 - Section 4 (UI Deliverables): For user-facing tasks, specifies UI states tied to DESIGN.md state matrix, formatting/content rules referencing DESIGN.md contract rules, accessibility checks, and validation method. For non-user-facing tasks: `N/A — no user-facing output` with rationale
 - Section 11 (Acceptance Criteria): User-facing tasks MUST include UI-specific criteria tied to DESIGN.md rules and state matrix entries, ensuring measurable UI validation

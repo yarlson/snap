@@ -74,6 +74,15 @@ func TestFlags(t *testing.T) {
 	}
 }
 
+func TestRootCommand_TaskFileFlagRecognized(t *testing.T) {
+	taskFile = ""
+	t.Cleanup(func() { taskFile = "" })
+
+	err := rootCmd.ParseFlags([]string{"--task-file", "/tmp/custom-task.md"})
+	require.NoError(t, err)
+	assert.Equal(t, "/tmp/custom-task.md", taskFile)
+}
+
 func TestRootCommand_InvalidFlagDoesNotPrintUsage(t *testing.T) {
 	// Use the shared root command but restore test-facing settings afterward.
 	origArgs := rootCmd.Flags().Args()

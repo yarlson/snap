@@ -2,14 +2,18 @@
 
 1. Read CLAUDE.md or AGENTS.md if present — follow all project conventions
 2. Read docs/context/context-map.md, then summary.md, terminology.md, practices.md, and relevant domain files
+   {{- if .PRDPath}}
 3. Read {{.PRDPath}} for product context
-4. If TECHNOLOGY.md exists, read it for architecture and tech stack
-5. If DESIGN.md exists, read it for voice, terminology, content patterns, and UI conventions
-6. If TASKS.md exists, read it for task structure
-   {{- if .TaskPath}}
-7. Read {{.TaskPath}} — this is the task to implement
+   {{- else}}
+4. No PRD is provided for this run. Derive product context from the task file and existing code.
    {{- end}}
-8. Study existing source code for established patterns, naming, and structure
+5. If TECHNOLOGY.md exists, read it for architecture and tech stack
+6. If DESIGN.md exists, read it for voice, terminology, content patterns, and UI conventions
+7. If TASKS.md exists, read it for task structure
+   {{- if .TaskPath}}
+8. Read {{.TaskPath}} — this is the task to implement
+   {{- end}}
+9. Study existing source code for established patterns, naming, and structure
 
 {{if .TaskID}}Implement {{.TaskID}} in this run.{{else}}Pick the next unimplemented task and implement only that one.{{end}}
 

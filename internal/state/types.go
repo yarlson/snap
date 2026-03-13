@@ -81,9 +81,6 @@ func (s *State) IsValid() bool {
 	if s.CurrentStep < 1 || s.CurrentStep > s.TotalSteps+1 {
 		return false
 	}
-	if s.PRDPath == "" {
-		return false
-	}
 	if s.TasksDir == "" {
 		return false
 	}

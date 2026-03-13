@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -36,6 +38,7 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 
 	runCmd.Flags().StringVarP(&prdPath, "prd", "p", "", "Path to PRD file (default: <tasks-dir>/PRD.md)")
+	runCmd.Flags().StringVar(&taskFile, "task-file", "", "Path to a single task file to run")
 	runCmd.Flags().BoolVar(&freshStart, "fresh", false, "Force fresh start, ignore existing state")
 	runCmd.Flags().BoolVar(&showState, "show-state", false, "Show current state and exit")
 	runCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON (only with --show-state)")
@@ -45,20 +48,25 @@ func init() {
 type runConfig struct {
 	tasksDir     string
 	prdPath      string
+	taskFile     string
 	displayName  string
 	stateManager workflow.StateManager
 	userSupplied bool // true when paths come from user-provided flags; false for auto-detected or session-derived paths
 }
 
-func run(_ *cobra.Command, args []string) error {
+func run(cmd *cobra.Command, args []string) error {
 	var sessionName string
 	if len(args) > 0 {
 		sessionName = args[0]
 	}
 
+	if err := validateRunFlags(cmd, sessionName, taskFile); err != nil {
+		return err
+	}
+
 	// Handle --show-state flag before provider validation.
 	if showState {
-		return handleShowState(sessionName)
+		return handleShowState(sessionName, taskFile)
 	}
 
 	// Pre-flight: validate provider CLI is available in PATH.
@@ -80,7 +88,7 @@ func run(_ *cobra.Command, args []string) error {
 	}
 
 	// Resolve session or legacy layout.
-	rc, err := resolveRunConfig(sessionName, tasksDir, prdPath)
+	rc, err := resolveRunConfig(sessionName, tasksDir, prdPath, taskFile)
 	if err != nil {
 		return err
 	}
@@ -88,17 +96,25 @@ func run(_ *cobra.Command, args []string) error {
 	// Validate paths for security (injection, traversal) — only for user-provided flags.
 	// Auto-detected and session-derived paths are constructed from validated sources.
 	if rc.userSupplied {
-		if err := pathutil.ValidatePath(rc.tasksDir); err != nil {
-			return fmt.Errorf("invalid tasks directory: %w", err)
-		}
-		if err := pathutil.ValidatePath(rc.prdPath); err != nil {
-			return fmt.Errorf("invalid PRD path: %w", err)
+		if rc.taskFile != "" {
+			if _, err := normalizeTaskFilePath(rc.taskFile); err != nil {
+				return fmt.Errorf("invalid task file: %w", err)
+			}
+		} else {
+			if err := pathutil.ValidatePath(rc.tasksDir); err != nil {
+				return fmt.Errorf("invalid tasks directory: %w", err)
+			}
+			if err := pathutil.ValidatePath(rc.prdPath); err != nil {
+				return fmt.Errorf("invalid PRD path: %w", err)
+			}
 		}
 	}
 
 	// Check if PRD file exists and warn if not.
-	if exists, warning := pathutil.CheckPathExists(rc.prdPath); !exists {
-		fmt.Fprint(os.Stderr, ui.Info(warning))
+	if rc.prdPath != "" {
+		if exists, warning := pathutil.CheckPathExists(rc.prdPath); !exists {
+			fmt.Fprint(os.Stderr, ui.Info(warning))
+		}
 	}
 
 	executor, err := provider.NewExecutorFromEnv()
@@ -110,6 +126,7 @@ func run(_ *cobra.Command, args []string) error {
 	config := workflow.Config{
 		TasksDir:     rc.tasksDir,
 		PRDPath:      rc.prdPath,
+		TaskFilePath: rc.taskFile,
 		FreshStart:   freshStart,
 		ProviderName: providerName,
 		IsTTY:        isTTY,
@@ -174,9 +191,83 @@ func run(_ *cobra.Command, args []string) error {
 	return runner.Run(context.Background())
 }
 
+func validateRunFlags(cmd *cobra.Command, sessionName, taskFilePath string) error {
+	if taskFilePath == "" {
+		return nil
+	}
+	if sessionName != "" {
+		return fmt.Errorf("--task-file cannot be used with a session name")
+	}
+	if cmd.Flags().Changed("prd") {
+		return fmt.Errorf("--task-file cannot be used with --prd")
+	}
+	if cmd.Flags().Changed("tasks-dir") {
+		return fmt.Errorf("--task-file cannot be used with --tasks-dir")
+	}
+	return nil
+}
+
+func normalizeTaskFilePath(path string) (string, error) {
+	if strings.Contains(path, "\n") || strings.Contains(path, "\r") {
+		return "", fmt.Errorf("path contains invalid characters (newline)")
+	}
+	if strings.TrimSpace(path) == "" {
+		return "", fmt.Errorf("path cannot be empty")
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+	return absPath, nil
+}
+
+func resolveExistingTaskFilePath(path string) (string, error) {
+	absPath, err := normalizeTaskFilePath(path)
+	if err != nil {
+		return "", err
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("task file not found: %s", absPath)
+		}
+		return "", fmt.Errorf("task file not accessible: %w", err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("task file must be a file: %s", absPath)
+	}
+	return absPath, nil
+}
+
+func resolveTaskFileRun(path string) (*runConfig, error) {
+	absPath, err := resolveExistingTaskFilePath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &runConfig{
+		tasksDir:     filepath.Dir(absPath),
+		prdPath:      "",
+		taskFile:     absPath,
+		displayName:  absPath,
+		stateManager: newAdhocStateManager(absPath),
+		userSupplied: true,
+	}, nil
+}
+
+func newAdhocStateManager(taskFilePath string) workflow.StateManager {
+	sum := sha256.Sum256([]byte(taskFilePath))
+	stateDir := filepath.Join(".snap", "adhoc", hex.EncodeToString(sum[:]))
+	return state.NewManagerInDir(stateDir)
+}
+
 // resolveRunConfig determines the tasks directory, PRD path, display name, and
 // state manager based on the session name (or auto-detection/legacy fallback).
-func resolveRunConfig(sessionName, flagTasksDir, flagPRDPath string) (*runConfig, error) {
+func resolveRunConfig(sessionName, flagTasksDir, flagPRDPath, flagTaskFile string) (*runConfig, error) {
+	if flagTaskFile != "" {
+		return resolveTaskFileRun(flagTaskFile)
+	}
 	if sessionName != "" {
 		return resolveNamedSession(sessionName)
 	}
@@ -250,8 +341,8 @@ func formatMultipleSessionsError(sessions []session.Info) error {
 }
 
 // handleShowState displays workflow state for the resolved session or legacy layout.
-func handleShowState(sessionName string) error {
-	sm, err := resolveStateManager(sessionName)
+func handleShowState(sessionName, taskFilePath string) error {
+	sm, err := resolveStateManager(sessionName, taskFilePath)
 	if err != nil {
 		return err
 	}
@@ -281,7 +372,14 @@ func handleShowState(sessionName string) error {
 
 // resolveStateManager returns a state manager for the given session or legacy layout.
 // Returns an error if a session name is explicitly provided but the session does not exist.
-func resolveStateManager(sessionName string) (workflow.StateManager, error) {
+func resolveStateManager(sessionName, taskFilePath string) (workflow.StateManager, error) {
+	if taskFilePath != "" {
+		absPath, err := resolveExistingTaskFilePath(taskFilePath)
+		if err != nil {
+			return nil, err
+		}
+		return newAdhocStateManager(absPath), nil
+	}
 	if sessionName != "" {
 		dir, err := session.Resolve(".", sessionName)
 		if err != nil {

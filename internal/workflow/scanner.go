@@ -61,6 +61,32 @@ func ScanTasks(dir string) ([]TaskInfo, error) {
 	return tasks, nil
 }
 
+// ScanSingleTask returns a synthetic task list for a single ad hoc task file.
+func ScanSingleTask(path string) ([]TaskInfo, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("task file not found: %s", path)
+		}
+		return nil, fmt.Errorf("read task file: %w", err)
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("task path is a directory: %s", path)
+	}
+
+	filename := filepath.Base(path)
+	id := strings.TrimSuffix(filename, filepath.Ext(filename))
+	if id == "" {
+		id = filename
+	}
+
+	return []TaskInfo{{
+		ID:       id,
+		Number:   1,
+		Filename: filename,
+	}}, nil
+}
+
 // caseMismatchRegex matches task filenames case-insensitively (e.g., task1.md, Task2.md).
 var caseMismatchRegex = regexp.MustCompile(`(?i)^task(\d+)\.md$`)
 

@@ -13,9 +13,9 @@ Verify {{.TaskID}} is fully implemented by checking every acceptance criterion i
 
 For every acceptance criterion in the task, identify covering evidence (a passing test or validated artifact). Produce a mapping table:
 
-| # | Criterion | Evidence | Status |
-|---|-----------|----------|--------|
-| 1 | <criterion text> | <test name or artifact> | COVERED / MISSING |
+| #   | Criterion        | Evidence                | Status            |
+| --- | ---------------- | ----------------------- | ----------------- |
+| 1   | <criterion text> | <test name or artifact> | COVERED / MISSING |
 
 For each criterion with Status = MISSING:
 

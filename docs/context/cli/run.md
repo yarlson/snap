@@ -2,11 +2,12 @@
 
 ## Overview
 
-The `run` command orchestrates the task implementation workflow. It supports three invocation modes:
+The `run` command orchestrates the task implementation workflow. It supports four invocation modes:
 
 1. **Named session**: `snap run <name>` — runs a specific named session
 2. **Auto-detection**: `snap run` (no args) — auto-selects if exactly one session exists, falls back to legacy layout
 3. **Legacy mode**: Uses `docs/tasks/` directory (backward compatible)
+4. **Ad hoc single-task mode**: `snap run --task-file <path>` — runs one task file directly, with no PRD or session required
 
 ## Implementation
 
@@ -18,8 +19,9 @@ The `run` command orchestrates the task implementation workflow. It supports thr
 
 ## Command Signature
 
-```
+```bash
 snap run [session] [flags]
+snap run --task-file path/to/task.md [flags]
 ```
 
 **Arguments**:
@@ -30,6 +32,7 @@ snap run [session] [flags]
 
 - `--tasks-dir <path>` — Tasks directory (default: `docs/tasks`); ignored if session is provided
 - `--prd <path>` — Custom PRD file path (default: `<tasks-dir>/PRD.md`)
+- `--task-file <path>` — Run a single task file directly; incompatible with session arg, `--tasks-dir`, and `--prd`
 - `--fresh` — Ignore existing state, start fresh
 - `--show-state` — Display workflow progress and exit
 - `--show-state --json` — Output raw state JSON
@@ -45,12 +48,32 @@ Before starting the workflow, `run` performs:
 
 ## Session Resolution Logic
 
-The `resolveRunConfig()` function determines the tasks directory, PRD path, display name, and state manager:
+The `resolveRunConfig()` function determines the tasks directory, PRD path, task file path, display name, and state manager:
 
-1. **If session name provided**: Resolve named session (error if not found)
-2. **If no sessions exist**: Fall back to legacy layout (docs/tasks/ or --tasks-dir flag)
-3. **If exactly one session exists**: Auto-select it
-4. **If multiple sessions exist**: Error with list of available sessions
+1. **If `--task-file` provided**: Resolve ad hoc single-task mode
+2. **If session name provided**: Resolve named session (error if not found)
+3. **If no sessions exist**: Fall back to legacy layout (docs/tasks/ or --tasks-dir flag)
+4. **If exactly one session exists**: Auto-select it
+5. **If multiple sessions exist**: Error with list of available sessions
+
+### Ad Hoc Single-Task Resolution
+
+**Function**: `resolveTaskFileRun(path)`
+
+- Accepts any file path, relative or absolute, including paths outside the repository
+- Resolves the path to an absolute path and validates that it is a regular file
+- Uses the task file's parent directory as `tasksDir` for local context lookups
+- Sets `prdPath` to empty string (no PRD required)
+- Sets `taskFile` to the resolved absolute path
+- Display name: absolute task file path (shown in startup summary)
+- State manager: Ad hoc scoped state under `.snap/adhoc/<sha256(taskFile)>/state.json`
+
+**Behavioral notes**:
+
+- The task file can have any filename, not just `TASK<N>.md`
+- The runner synthesizes a single task inventory from that file
+- The 10-step workflow is unchanged
+- If `PRD.md`, `TECHNOLOGY.md`, `DESIGN.md`, or `TASKS.md` exist near the task file, prompts may still read them opportunistically
 
 ### Named Session Resolution
 
@@ -81,11 +104,12 @@ The `resolveRunConfig()` function determines the tasks directory, PRD path, disp
 
 ### Auto-Detection Sequence
 
-**Function**: `resolveRunConfig(sessionName, flagTasksDir, flagPRDPath)`
+**Function**: `resolveRunConfig(sessionName, flagTasksDir, flagPRDPath, flagTaskFile)`
 
-1. If session name explicitly provided → resolve as named session
-2. List all sessions via `session.List(".")`
-3. Switch based on count:
+1. If `--task-file` explicitly provided → resolve as ad hoc single-task mode
+2. If session name explicitly provided → resolve as named session
+3. List all sessions via `session.List(".")`
+4. Switch based on count:
    - **0 sessions, legacy layout exists**: Fall back to legacy layout (docs/tasks/ or --tasks-dir)
    - **0 sessions, no legacy layout**: Auto-create "default" session and use it
    - **1 session**: Auto-select that session
@@ -101,16 +125,18 @@ The `resolveRunConfig()` function determines the tasks directory, PRD path, disp
 
 Session-scoped vs. legacy state is determined by what's resolved:
 
+- **Ad hoc single-task mode**: Uses `state.NewManagerInDir(".snap/adhoc/<hash>")` → state.json at `.snap/adhoc/<hash>/state.json`
 - **Named session**: Uses `state.NewManagerInDir(sessionDir)` → state.json at `.snap/sessions/<name>/state.json`
 - **Auto-detected single session**: Same as named session
 - **Legacy layout**: Uses `state.NewManager()` → state.json at `.snap/state.json`
 
-State managers are independent: session state does not interfere with legacy state.
+State managers are independent: ad hoc task state does not interfere with session or legacy state.
 
 ### Show-State Session Resolution
 
-**Function**: `resolveStateManager(sessionName)` (used by `--show-state` flag)
+**Function**: `resolveStateManager(sessionName, taskFilePath)` (used by `--show-state` flag)
 
+- If `--task-file` provided: Resolves to that task file's ad hoc state manager
 - If session name provided: Resolves as named session and returns its state manager
 - If no session name provided: Auto-detects via `session.List()`:
   - **1 session**: Returns its state manager
@@ -123,10 +149,10 @@ This enables fresh projects to use `snap run --show-state` without requiring ses
 
 ## Show State with Sessions
 
-`snap run [session] --show-state` displays state for the resolved session:
+`snap run [session] --show-state` and `snap run --task-file <path> --show-state` display state for the resolved workflow target:
 
-1. Resolve session or legacy layout (same logic as normal run)
-2. Load state from session-scoped or legacy manager
+1. Resolve ad hoc task, session, or legacy layout (same logic as normal run)
+2. Load state from ad hoc, session-scoped, or legacy manager
 3. Format human-readable summary or JSON output
    - No state file → displays "No state file exists" with `ui.Info()` formatting
 
@@ -136,6 +162,7 @@ This enables fresh projects to use `snap run --show-state` without requiring ses
 
 The `displayName` field (in `runConfig`) is used in the startup summary:
 
+- Ad hoc single-task mode: Shows resolved task file path
 - Named session: Shows session name (e.g., `snap: auth |`)
 - Auto-detected session: Shows session name (e.g., `snap: api |`)
 - Legacy layout: Shows tasks directory (e.g., `snap: docs/tasks |`)
@@ -145,10 +172,13 @@ The `displayName` field (in `runConfig`) is used in the startup summary:
 - **PRD file warning** — When PRD file doesn't exist, displays warning message via `ui.Info()` (dimmed text)
 - **No state file message** — When `--show-state` is used but no state exists, displays "No state file exists" via `ui.Info()`
 
+In ad hoc single-task mode, there is no PRD warning because `PRDPath` is intentionally empty.
+
 ## Path Validation
 
 Security validation is applied only to user-supplied paths:
 
+- `--task-file` paths allow locations outside the repository; validation checks newline safety, resolves absolute path, and requires a regular file
 - Named session paths are constructed from validated session names
 - Legacy paths may come from `--tasks-dir` flag → validated if present
 - Auto-detected paths are constructed safely → no validation needed
@@ -164,10 +194,12 @@ Security validation is applied only to user-supplied paths:
 - `TestResolveRunConfig_NoName_ZeroSessions_LegacyStateFile` — Legacy fallback with state.json (prevents auto-create)
 - `TestResolveRunConfig_NoName_OneSession` — Auto-detection of single session
 - `TestResolveRunConfig_NoName_MultipleSessions` — Error with multiple sessions
+- `TestResolveRunConfig_TaskFile_AnywhereOnDisk` — Ad hoc task-file resolution outside repo
 - `TestResolveRunConfig_SessionStateManager_IndependentFromLegacy` — Session/legacy isolation
 - `TestResolveRunConfig_SessionWhilePlanning` — Sessions during planning phase
 - `TestResolveRunConfig_FreshWithSession` — --fresh flag resets session state
 - `TestResolveRunConfig_ShowStateWithSession` — State inspection on session
+- `TestResolveStateManager_TaskFile_UsesIsolatedAdhocState` — Ad hoc state manager isolation
 - `TestResolveStateManager_ZeroSessions_CreatesDefault` — Auto-create default for show-state
 - `TestResolveStateManager_ZeroSessions_LegacyTaskFiles` — Legacy fallback prevents auto-create for show-state
 
@@ -188,7 +220,8 @@ Security validation is applied only to user-supplied paths:
 ## Design Notes
 
 - **Backward compatibility**: Bare `snap` command (via defaultCmd in root) still routes to run logic
+- **Ad hoc isolation**: Each `--task-file` path gets its own independent state directory under `.snap/adhoc/`
 - **Session isolation**: Each session has completely independent state (no cross-contamination)
 - **Auto-detection usefulness**: Most useful in single-project repos with one session; multi-session repos require explicit session name
 - **Error clarity**: Messages always provide corrective actions (snap new, snap run <name>)
-- **Display consistency**: Startup summary shows what's running (session name or tasks dir)
+- **Display consistency**: Startup summary shows what's running (task file, session name, or tasks dir)

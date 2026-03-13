@@ -2,7 +2,7 @@
 
 ## Core Concepts
 
-**Task** — Individual feature or requirement to implement, stored as a separate file (TASK1.md, TASK2.md, etc.) in `docs/tasks/` directory. Filenames are case-sensitive (uppercase required). Files are discovered and ordered numerically by scanner.
+**Task** — Individual feature or requirement to implement, usually stored as a separate file (TASK1.md, TASK2.md, etc.) in a tasks directory. Directory-scanned task files are case-sensitive and uppercase-required. `snap run --task-file <path>` also supports a single ad hoc task file with any filename.
 
 **Task Discovery Diagnostics** — Automated checks that identify common task discovery failures: detects case-mismatched filenames (task1.md vs TASK1.md) and PRD-embedded task headers (## TASK1: Feature in PRD.md). Returns user-friendly hints with corrective actions. Triggered when task scanner finds no valid files.
 
@@ -14,7 +14,7 @@
 
 **Workflow** — Complete orchestration of multiple iterations (one per task) until all tasks complete or user stops.
 
-**State** — Current progress snapshot saved to `.snap/state.json` (default workflow) or `.snap/sessions/<name>/state.json` (named session), enables resumable execution across interruptions.
+**State** — Current progress snapshot saved to `.snap/state.json` (default workflow), `.snap/sessions/<name>/state.json` (named session), or `.snap/adhoc/<hash>/state.json` (single ad hoc task file), enables resumable execution across interruptions.
 
 **Session** — Named project workspace with isolated task directory, separate state tracking, and independent workflow execution. Each session has its own task files at `.snap/sessions/<name>/tasks/` and state at `.snap/sessions/<name>/state.json`.
 
@@ -26,7 +26,9 @@
 
 **Legacy fallback** — Workflow mode used when no named sessions exist, falling back to task files in `docs/tasks/` directory or `--tasks-dir` flag. Uses global `.snap/state.json` for state tracking, not session-scoped state.
 
-**Display Name** — Session name or tasks directory path shown in startup summary. For named sessions: shows session name (e.g., "auth"). For legacy layout: shows tasks directory path (e.g., "docs/tasks"). Used in startup summary and --show-state output.
+**Ad hoc task mode** — Workflow mode triggered by `snap run --task-file <path>`. Runs the full 10-step flow against exactly one task file, with no PRD, TECHNOLOGY, DESIGN, or session required. Uses a task-file-scoped state directory under `.snap/adhoc/`.
+
+**Display Name** — Session name, tasks directory path, or ad hoc task file path shown in startup summary. For named sessions: shows session name (e.g., "auth"). For legacy layout: shows tasks directory path (e.g., "docs/tasks"). For ad hoc mode: shows the resolved task file path. Used in startup summary and --show-state output.
 
 ## Execution & Control
 

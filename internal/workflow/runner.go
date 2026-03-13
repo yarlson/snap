@@ -33,6 +33,7 @@ func StepCount() int {
 type Config struct {
 	TasksDir     string
 	PRDPath      string
+	TaskFilePath string // Optional path to a single ad hoc task file
 	FreshStart   bool   // Force fresh start, ignore existing state
 	ProviderName string // Provider display name (e.g. "claude", "codex")
 	IsTTY        bool   // Whether stdout is a terminal
@@ -181,7 +182,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 
 	// Resolve startup target: resume active task or select next.
-	target, err := resolveStartup(workflowState, r.config.TasksDir, workflowStepCount)
+	target, err := resolveStartup(workflowState, r.config.TasksDir, r.config.TaskFilePath, workflowStepCount)
 	if err != nil {
 		return fmt.Errorf("cannot resume: %w", err)
 	}
@@ -210,7 +211,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	if isResume {
 		taskCount = len(target.tasks)
 	} else {
-		tasks, err := ScanTasks(r.config.TasksDir)
+		tasks, err := r.discoverTasks()
 		if err != nil {
 			return fmt.Errorf("failed to scan tasks for summary: %w", err)
 		}
@@ -274,7 +275,7 @@ func (r *Runner) Run(ctx context.Context) error {
 // It updates the state with the selected task and saves it. Returns (true, nil) when
 // all tasks are complete (caller should exit cleanly).
 func (r *Runner) selectIdleTask(ctx context.Context, workflowState *state.State) (bool, error) {
-	tasks, err := ScanTasks(r.config.TasksDir)
+	tasks, err := r.discoverTasks()
 	if err != nil {
 		return false, fmt.Errorf("failed to scan tasks: %w", err)
 	}
@@ -324,7 +325,7 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 	// Generate a one-line task description via fast model (best-effort).
 	var description string
 	if workflowState.CurrentTaskFile != "" {
-		taskFilePath := filepath.Join(r.config.TasksDir, workflowState.CurrentTaskFile)
+		taskFilePath := r.activeTaskPath(workflowState.CurrentTaskFile)
 		if content, err := os.ReadFile(taskFilePath); err == nil {
 			// Truncate to first 2000 bytes to avoid sending large files to LLM.
 			taskContent := string(content)
@@ -347,7 +348,7 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 		PRDPath: r.config.PRDPath,
 	}
 	if workflowState.CurrentTaskFile != "" {
-		implementData.TaskPath = filepath.Join(r.config.TasksDir, workflowState.CurrentTaskFile)
+		implementData.TaskPath = r.activeTaskPath(workflowState.CurrentTaskFile)
 		implementData.TaskID = workflowState.CurrentTaskID
 	}
 	implementPrompt, err := prompts.Implement(implementData)
@@ -540,4 +541,21 @@ func (r *Runner) runIteration(ctx context.Context, workflowState *state.State) (
 	}
 
 	return true, nil
+}
+
+func (r *Runner) discoverTasks() ([]TaskInfo, error) {
+	if r.config.TaskFilePath != "" {
+		return ScanSingleTask(r.config.TaskFilePath)
+	}
+	return ScanTasks(r.config.TasksDir)
+}
+
+func (r *Runner) activeTaskPath(currentTaskFile string) string {
+	if r.config.TaskFilePath != "" {
+		return r.config.TaskFilePath
+	}
+	if currentTaskFile == "" {
+		return ""
+	}
+	return filepath.Join(r.config.TasksDir, currentTaskFile)
 }

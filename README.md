@@ -28,9 +28,12 @@ snap plan my-feature
 
 # Let snap implement everything
 snap run my-feature
+
+# Or run the full 10-step flow from one task file only
+snap run --task-file /path/to/custom-task.md
 ```
 
-That's it. `snap plan` walks you through requirements and generates task files. `snap run` picks them up one by one and implements each to completion. On a fresh project with no sessions, `snap plan` automatically creates a default session.
+That's it. `snap plan` walks you through requirements and generates task files. `snap run` picks them up one by one and implements each to completion. If you already have a single task file and no planning docs, `snap run --task-file ...` runs that one file through the same 10-step loop. On a fresh project with no sessions, `snap plan` automatically creates a default session.
 
 ### Prerequisites
 
@@ -61,6 +64,16 @@ snap plan --from requirements.md
 ### Manual task files
 
 If you prefer full control, write task files directly in `docs/tasks/` and run `snap run`. Name them `TASK1.md`, `TASK2.md`, etc. (uppercase, numbered). Each should describe what to build, requirements, and acceptance criteria. See `example/` for a working sample.
+
+### Single task file mode
+
+If you only have one task file, you can skip PRD, TECHNOLOGY, DESIGN, and session setup entirely:
+
+```bash
+snap run --task-file ./notes/custom-task.md
+```
+
+The file can have any name and live anywhere on disk. snap still runs the full 10-step implementation flow, and stores resumable state under `.snap/adhoc/`.
 
 ## The workflow
 
@@ -161,6 +174,7 @@ Session argument is optional: `snap plan` auto-creates a default session if none
 | ------------------- | -------------------------------------------------------- |
 | `--fresh`           | Discard saved state, start over                          |
 | `--show-state`      | Print current progress and exit (`--json` for raw state) |
+| `--task-file`       | Run one task file directly, with no PRD/session required |
 | `--tasks-dir`, `-d` | Custom tasks directory (default: `docs/tasks`)           |
 | `--prd`, `-p`       | Custom PRD file path                                     |
 | `--from`            | Feed requirements from file (plan command only)          |
@@ -185,7 +199,7 @@ snap run my-feature
 # snap: my-feature | claude | 3 tasks (1 done) | resuming TASK2 from step 5
 ```
 
-Picks up exactly where it stopped. State lives in `.snap/state.json` (or `.snap/sessions/<name>/state.json` for sessions).
+Picks up exactly where it stopped. State lives in `.snap/state.json` for legacy runs, `.snap/sessions/<name>/state.json` for sessions, or `.snap/adhoc/<hash>/state.json` for `--task-file` runs.
 
 ## Troubleshooting
 

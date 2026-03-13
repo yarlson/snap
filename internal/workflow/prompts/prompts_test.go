@@ -45,6 +45,20 @@ func TestImplement_AutoSelect(t *testing.T) {
 	assert.Contains(t, result, "Pre-Implementation Alignment")
 }
 
+func TestImplement_WithoutPRD(t *testing.T) {
+	data := prompts.ImplementData{
+		TaskPath: "/tmp/custom-task.md",
+		TaskID:   "custom-task",
+	}
+
+	result, err := prompts.Implement(data)
+	require.NoError(t, err)
+
+	assert.Contains(t, result, "No PRD is provided for this run")
+	assert.Contains(t, result, "/tmp/custom-task.md")
+	assert.NotContains(t, result, "Read  for product context")
+}
+
 func TestImplement_PreImplementationAlignment(t *testing.T) {
 	data := prompts.ImplementData{PRDPath: "docs/PRD.md", TaskPath: "docs/tasks/TASK1.md", TaskID: "TASK1"}
 	result, err := prompts.Implement(data)

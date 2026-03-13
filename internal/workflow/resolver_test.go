@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,14 +12,14 @@ import (
 
 func TestResolveStartup(t *testing.T) {
 	t.Run("returns select action for nil state", func(t *testing.T) {
-		target, err := resolveStartup(nil, t.TempDir(), 9)
+		target, err := resolveStartup(nil, t.TempDir(), "", 9)
 		require.NoError(t, err)
 		assert.Equal(t, actionSelect, target.action)
 	})
 
 	t.Run("returns select action for idle state", func(t *testing.T) {
 		s := state.NewState("docs/tasks", "PRD.md", 9)
-		target, err := resolveStartup(s, t.TempDir(), 9)
+		target, err := resolveStartup(s, t.TempDir(), "", 9)
 		require.NoError(t, err)
 		assert.Equal(t, actionSelect, target.action)
 	})
@@ -33,7 +34,7 @@ func TestResolveStartup(t *testing.T) {
 		s.CurrentTaskFile = "TASK1.md"
 		s.CurrentStep = 3
 
-		target, err := resolveStartup(s, dir, 9)
+		target, err := resolveStartup(s, dir, "", 9)
 		require.NoError(t, err)
 		assert.Equal(t, actionResume, target.action)
 		assert.Equal(t, "TASK1", target.taskID)
@@ -50,7 +51,7 @@ func TestResolveStartup(t *testing.T) {
 		s.CurrentTaskFile = "TASK1.md"
 		s.CurrentStep = 1
 
-		_, err := resolveStartup(s, dir, 9)
+		_, err := resolveStartup(s, dir, "", 9)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "TASK1")
 		assert.Contains(t, err.Error(), "not found")
@@ -72,7 +73,7 @@ func TestResolveStartup(t *testing.T) {
 			PRDPath:          "PRD.md",
 		}
 
-		_, err := resolveStartup(s, dir, 9)
+		_, err := resolveStartup(s, dir, "", 9)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "already")
 		assert.Contains(t, err.Error(), "--fresh")
@@ -87,7 +88,7 @@ func TestResolveStartup(t *testing.T) {
 		s.CurrentTaskFile = "TASK1.md"
 		s.CurrentStep = 0
 
-		_, err := resolveStartup(s, dir, 9)
+		_, err := resolveStartup(s, dir, "", 9)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid step")
 		assert.Contains(t, err.Error(), "--fresh")
@@ -102,7 +103,7 @@ func TestResolveStartup(t *testing.T) {
 		s.CurrentTaskFile = "TASK1.md"
 		s.CurrentStep = 7 // > totalSteps(5) + 1
 
-		_, err := resolveStartup(s, dir, 5)
+		_, err := resolveStartup(s, dir, "", 5)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid step")
 	})
@@ -116,7 +117,7 @@ func TestResolveStartup(t *testing.T) {
 		s.CurrentTaskFile = "TASK1.md"
 		s.CurrentStep = 9
 
-		target, err := resolveStartup(s, dir, 9)
+		target, err := resolveStartup(s, dir, "", 9)
 		require.NoError(t, err)
 		assert.Equal(t, actionResume, target.action)
 		assert.Equal(t, 9, target.step)
@@ -131,7 +132,7 @@ func TestResolveStartup(t *testing.T) {
 		s.CurrentTaskFile = "TASK1.md"
 		s.CurrentStep = 10 // totalSteps + 1: all steps done, cleanup pending
 
-		target, err := resolveStartup(s, dir, 9)
+		target, err := resolveStartup(s, dir, "", 9)
 		require.NoError(t, err)
 		assert.Equal(t, actionResume, target.action)
 		assert.Equal(t, 10, target.step)
@@ -143,7 +144,7 @@ func TestResolveStartup(t *testing.T) {
 		s.CurrentTaskFile = "TASK1.md"
 		s.CurrentStep = 1
 
-		_, err := resolveStartup(s, "/nonexistent", 9)
+		_, err := resolveStartup(s, "/nonexistent", "", 9)
 		assert.Error(t, err)
 	})
 
@@ -157,7 +158,7 @@ func TestResolveStartup(t *testing.T) {
 		s.CurrentTaskFile = "" // empty, as after v1 migration
 		s.CurrentStep = 3
 
-		target, err := resolveStartup(s, dir, 9)
+		target, err := resolveStartup(s, dir, "", 9)
 		require.NoError(t, err)
 		assert.Equal(t, actionResume, target.action)
 		assert.Equal(t, "TASK2", target.taskID)
@@ -170,8 +171,40 @@ func TestResolveStartup(t *testing.T) {
 		// Pass a nonexistent directory. If the scanner were called,
 		// it would fail. Idle state should not trigger scanning.
 		s := state.NewState("/nonexistent", "PRD.md", 9)
-		target, err := resolveStartup(s, "/nonexistent", 9)
+		target, err := resolveStartup(s, "/nonexistent", "", 9)
 		require.NoError(t, err)
 		assert.Equal(t, actionSelect, target.action)
+	})
+
+	t.Run("returns resume target for valid active single-task state", func(t *testing.T) {
+		dir := t.TempDir()
+		taskPath := filepath.Join(dir, "ad-hoc-task.md")
+		createFile(t, dir, "ad-hoc-task.md", "# Task")
+
+		s := state.NewState(dir, "", 9)
+		s.CurrentTaskID = "ad-hoc-task"
+		s.CurrentTaskFile = "ad-hoc-task.md"
+		s.CurrentStep = 3
+
+		target, err := resolveStartup(s, dir, taskPath, 9)
+		require.NoError(t, err)
+		assert.Equal(t, actionResume, target.action)
+		assert.Equal(t, "ad-hoc-task", target.taskID)
+		assert.Equal(t, "ad-hoc-task.md", target.taskFile)
+		assert.Len(t, target.tasks, 1)
+	})
+
+	t.Run("errors when single-task file is missing", func(t *testing.T) {
+		dir := t.TempDir()
+		taskPath := filepath.Join(dir, "ad-hoc-task.md")
+
+		s := state.NewState(dir, "", 9)
+		s.CurrentTaskID = "ad-hoc-task"
+		s.CurrentTaskFile = "ad-hoc-task.md"
+		s.CurrentStep = 1
+
+		_, err := resolveStartup(s, dir, taskPath, 9)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
 	})
 }

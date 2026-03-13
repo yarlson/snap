@@ -40,11 +40,11 @@ Workflow Runner (orchestrates 10-step iteration workflow)
 
 ## System State
 
-- **Task files**: Stored in `docs/tasks/` (legacy) or `.snap/sessions/<name>/tasks/` (session-scoped); naming: TASK1.md, TASK2.md, etc. (case-sensitive, uppercase required)
-- **Task discovery**: Scanner finds and orders valid task files; detects case mismatches and PRD-embedded headers; PRD.md is optional overview document
+- **Task files**: Stored in `docs/tasks/` (legacy) or `.snap/sessions/<name>/tasks/` (session-scoped); naming: TASK1.md, TASK2.md, etc. (case-sensitive, uppercase required). `snap run --task-file <path>` also supports one ad hoc task file with any filename in any location
+- **Task discovery**: Scanner finds and orders valid task files; detects case mismatches and PRD-embedded headers; PRD.md is optional overview document. In ad hoc mode, runner synthesizes a single-task inventory from the provided file path
 - **Sessions**: Named project workspaces, each with isolated tasks directory and independent state; auto-detection uses exactly-one-session heuristic
-- **Session state**: Saved to `.snap/sessions/<name>/state.json` for named sessions or `.snap/state.json` for legacy layout (tracks completed tasks, current task, step progress)
-- **Run command**: Supports `snap run [session]` with three modes: named session, auto-detection (single session), legacy fallback (docs/tasks/)
+- **Session state**: Saved to `.snap/sessions/<name>/state.json` for named sessions, `.snap/state.json` for legacy layout, or `.snap/adhoc/<hash>/state.json` for ad hoc single-task runs (tracks completed tasks, current task, step progress)
+- **Run command**: Supports `snap run [session]` with four modes: named session, auto-detection (single session), legacy fallback (docs/tasks/), or ad hoc single-task mode via `--task-file`
 - **Context**: `docs/context/` stores project context for future runs
 - **Terminal output**: Uses ANSI colors, styled headers, progress indicators, task durations, diagnostic hints
 
@@ -54,7 +54,7 @@ Workflow Runner (orchestrates 10-step iteration workflow)
 - **Planning workflow**: `snap plan [session]` generates structured planning documents (PRD, TECHNOLOGY, DESIGN, TASK files) through two-phase pipeline (interactive requirements gathering with tap.Textarea multiline input for TTY or buffered input for pipes, then autonomous document generation with parallel execution of TECHNOLOGY and DESIGN documents); includes conflict guard to detect and handle existing planning artifacts; auto-creates "default" session on fresh projects with no sessions
 - **Session management**: `snap new <name>` creates named workspaces; `snap list` displays all sessions with task counts and status; `snap delete <name>` removes sessions (with confirmation or --force flag); `snap status [session]` shows detailed progress with task state and current step; each session has isolated tasks directory and state at `.snap/sessions/<name>/`
 - **Plan command**: `snap plan [session]` with two-phase pipeline: Phase 1 (interactive requirements gathering via tap.Textarea on TTY or buffered input on pipes), Phase 2 (7-step autonomous document generation: PRD sequential, TECHNOLOGY + DESIGN parallel, 4-step task generation chain with conversation continuity: create task list, assess against anti-patterns, refine via merge/split, generate TASKS.md summary, then parallel batched task file generation); guided by engineering principles (KISS, DRY, SOLID, YAGNI); conflict guard detects existing planning artifacts with TTY choice (clean up and re-plan vs. create new session) or non-TTY error; supports `--from <file>` to skip Phase 1; auto-creates "default" session if none exist; session auto-detection for single-session projects; Ctrl+C aborts planning gracefully
-- **Run command**: `snap run [session]` with three modes: explicit session, auto-detect (single session), legacy fallback (docs/tasks/); supports `--fresh` flag for state reset
+- **Run command**: `snap run [session]` with four modes: explicit session, auto-detect (single session), legacy fallback (docs/tasks/), or `--task-file <path>` for a single arbitrary task file; supports `--fresh` flag for state reset
 - **Multi-provider support**: Claude (default) or Codex via env var
 - **Provider validation**: Pre-flight check ensures provider CLI is available in PATH before execution
 - **Task discovery diagnostics**: Detects case-mismatched filenames (task1.md vs TASK1.md) and PRD-embedded task headers, provides corrective hints
@@ -67,7 +67,7 @@ Workflow Runner (orchestrates 10-step iteration workflow)
 - **Snapshot capture**: Optional git stash snapshots after each workflow step for debugging and recovery
 - **Task summaries**: Auto-generates one-line task descriptions during iteration setup for better context
 - **Version flag**: `--version` displays snap version (set at build time via ldflags)
-- **State inspection**: `--show-state` displays workflow progress in human-readable format; `--show-state --json` outputs raw state JSON; works with sessions
+- **State inspection**: `--show-state` displays workflow progress in human-readable format; `--show-state --json` outputs raw state JSON; works with sessions and `--task-file`
 - **Color output control**: NO_COLOR environment variable support (follows https://no-color.org/ standard); automatic color disabling in non-TTY contexts
 - **Auto-push and PR creation**: Upon workflow completion, automatically pushes commits to configured git remote (origin); on GitHub remotes, creates a pull request with LLM-generated title and description (using PRD context); skips PR if on default branch or PR already exists
 - **CI workflow monitoring**: Detects GitHub Actions workflows triggered by push or pull_request events; polls CI status after push/PR creation; displays status updates and final results; tracks individual checks (≤5) or summary view (>5 checks); automatically attempts to fix failing checks with LLM-generated minimal code changes (up to 10 attempts)

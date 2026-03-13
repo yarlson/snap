@@ -20,7 +20,7 @@ func TestResolveRunConfig_NamedSession_Exists(t *testing.T) {
 	require.NoError(t, os.MkdirAll(sessDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(sessDir, "TASK1.md"), []byte("# Task 1\n"), 0o600))
 
-	rc, err := resolveRunConfig("auth", "docs/tasks", "")
+	rc, err := resolveRunConfig("auth", "docs/tasks", "", "")
 	require.NoError(t, err)
 
 	// Paths are relative to cwd (project root is ".").
@@ -34,7 +34,7 @@ func TestResolveRunConfig_NamedSession_NotFound(t *testing.T) {
 	projectDir := t.TempDir()
 	chdir(t, projectDir)
 
-	_, err := resolveRunConfig("nonexistent", "docs/tasks", "")
+	_, err := resolveRunConfig("nonexistent", "docs/tasks", "", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 	assert.Contains(t, err.Error(), "snap new nonexistent")
@@ -44,7 +44,7 @@ func TestResolveRunConfig_NoName_ZeroSessions_NoLegacy(t *testing.T) {
 	projectDir := t.TempDir()
 	chdir(t, projectDir)
 
-	rc, err := resolveRunConfig("", "docs/tasks", "")
+	rc, err := resolveRunConfig("", "docs/tasks", "", "")
 	require.NoError(t, err)
 
 	// Should auto-create "default" session and return its config.
@@ -64,7 +64,7 @@ func TestResolveRunConfig_NoName_ZeroSessions_LegacyTaskFiles(t *testing.T) {
 	require.NoError(t, os.MkdirAll(legacyDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(legacyDir, "TASK1.md"), []byte("# Task 1\n"), 0o600))
 
-	rc, err := resolveRunConfig("", "docs/tasks", "")
+	rc, err := resolveRunConfig("", "docs/tasks", "", "")
 	require.NoError(t, err)
 
 	assert.Equal(t, "docs/tasks", rc.tasksDir)
@@ -96,7 +96,7 @@ func TestResolveRunConfig_NoName_ZeroSessions_LegacyStateFile(t *testing.T) {
 	}`
 	require.NoError(t, os.WriteFile(filepath.Join(snapDir, "state.json"), []byte(stateJSON), 0o600))
 
-	rc, err := resolveRunConfig("", "docs/tasks", "")
+	rc, err := resolveRunConfig("", "docs/tasks", "", "")
 	require.NoError(t, err)
 
 	assert.Equal(t, "docs/tasks", rc.tasksDir)
@@ -116,7 +116,7 @@ func TestResolveRunConfig_NoName_OneSession(t *testing.T) {
 	sessDir := filepath.Join(projectDir, ".snap", "sessions", "auth", "tasks")
 	require.NoError(t, os.MkdirAll(sessDir, 0o755))
 
-	rc, err := resolveRunConfig("", "docs/tasks", "")
+	rc, err := resolveRunConfig("", "docs/tasks", "", "")
 	require.NoError(t, err)
 
 	assert.Equal(t, filepath.Join(".snap", "sessions", "auth", "tasks"), rc.tasksDir)
@@ -133,7 +133,7 @@ func TestResolveRunConfig_NoName_MultipleSessions(t *testing.T) {
 		require.NoError(t, os.MkdirAll(sessDir, 0o755))
 	}
 
-	_, err := resolveRunConfig("", "docs/tasks", "")
+	_, err := resolveRunConfig("", "docs/tasks", "", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "multiple sessions found")
 	assert.Contains(t, err.Error(), "auth")
@@ -149,7 +149,7 @@ func TestResolveRunConfig_SessionStateManager_IndependentFromLegacy(t *testing.T
 	sessDir := filepath.Join(projectDir, ".snap", "sessions", "auth", "tasks")
 	require.NoError(t, os.MkdirAll(sessDir, 0o755))
 
-	rc, err := resolveRunConfig("auth", "docs/tasks", "")
+	rc, err := resolveRunConfig("auth", "docs/tasks", "", "")
 	require.NoError(t, err)
 
 	// Session state manager should NOT have state (fresh session).
@@ -184,7 +184,7 @@ func TestResolveRunConfig_SessionWhilePlanning(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(sessDir, ".plan-started"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(td, "TASK1.md"), []byte("# Task 1\n"), 0o600))
 
-	rc, err := resolveRunConfig("auth", "docs/tasks", "")
+	rc, err := resolveRunConfig("auth", "docs/tasks", "", "")
 	require.NoError(t, err)
 
 	// Should resolve successfully — reads whatever task files exist.
@@ -216,7 +216,7 @@ func TestResolveRunConfig_FreshWithSession(t *testing.T) {
 	}`
 	require.NoError(t, os.WriteFile(filepath.Join(sessDir, "state.json"), []byte(stateJSON), 0o600))
 
-	rc, err := resolveRunConfig("auth", "docs/tasks", "")
+	rc, err := resolveRunConfig("auth", "docs/tasks", "", "")
 	require.NoError(t, err)
 
 	// Session state manager should be scoped to session dir and see the state.
@@ -256,7 +256,7 @@ func TestResolveRunConfig_ShowStateWithSession(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(sessDir, "state.json"), []byte(stateJSON), 0o600))
 
 	// resolveStateManager should return session-scoped manager.
-	sm, err := resolveStateManager("auth")
+	sm, err := resolveStateManager("auth", "")
 	require.NoError(t, err)
 	assert.True(t, sm.Exists(), "session state manager should find state")
 
@@ -273,7 +273,7 @@ func TestResolveStateManager_ZeroSessions_CreatesDefault(t *testing.T) {
 	chdir(t, projectDir)
 
 	// No sessions exist — resolveStateManager with empty name should auto-create "default".
-	sm, err := resolveStateManager("")
+	sm, err := resolveStateManager("", "")
 	require.NoError(t, err)
 	assert.NotNil(t, sm)
 
@@ -294,7 +294,7 @@ func TestResolveStateManager_ZeroSessions_LegacyTaskFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(legacyDir, "TASK1.md"), []byte("# Task 1\n"), 0o600))
 
 	// Should return legacy manager, not create default session.
-	sm, err := resolveStateManager("")
+	sm, err := resolveStateManager("", "")
 	require.NoError(t, err)
 	assert.NotNil(t, sm)
 
@@ -302,6 +302,51 @@ func TestResolveStateManager_ZeroSessions_LegacyTaskFiles(t *testing.T) {
 	defaultDir := filepath.Join(projectDir, ".snap", "sessions", "default")
 	_, err = os.Stat(defaultDir)
 	assert.True(t, os.IsNotExist(err), "default session should not be created when legacy task directory exists")
+}
+
+func TestResolveRunConfig_TaskFile_AnywhereOnDisk(t *testing.T) {
+	projectDir := t.TempDir()
+	chdir(t, projectDir)
+
+	externalDir := t.TempDir()
+	taskFile := filepath.Join(externalDir, "custom-task.md")
+	require.NoError(t, os.WriteFile(taskFile, []byte("# Custom Task\n"), 0o600))
+
+	rc, err := resolveRunConfig("", "docs/tasks", "", taskFile)
+	require.NoError(t, err)
+
+	assert.Equal(t, externalDir, rc.tasksDir)
+	assert.Equal(t, "", rc.prdPath)
+	assert.Equal(t, taskFile, rc.displayName)
+	assert.Equal(t, taskFile, rc.taskFile)
+	assert.NotNil(t, rc.stateManager)
+	assert.True(t, rc.userSupplied)
+}
+
+func TestResolveStateManager_TaskFile_UsesIsolatedAdhocState(t *testing.T) {
+	projectDir := t.TempDir()
+	chdir(t, projectDir)
+
+	externalDir := t.TempDir()
+	taskFile := filepath.Join(externalDir, "custom-task.md")
+	require.NoError(t, os.WriteFile(taskFile, []byte("# Custom Task\n"), 0o600))
+
+	sm, err := resolveStateManager("", taskFile)
+	require.NoError(t, err)
+	assert.NotNil(t, sm)
+	assert.False(t, sm.Exists())
+}
+
+func TestResolveStateManager_TaskFile_MissingFile(t *testing.T) {
+	projectDir := t.TempDir()
+	chdir(t, projectDir)
+
+	missingTaskFile := filepath.Join(t.TempDir(), "missing-task.md")
+
+	sm, err := resolveStateManager("", missingTaskFile)
+	require.Error(t, err)
+	assert.Nil(t, sm)
+	assert.Contains(t, err.Error(), "task file not found")
 }
 
 // chdir changes to the given directory and restores on cleanup.

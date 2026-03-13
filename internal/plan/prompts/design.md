@@ -46,12 +46,12 @@ One file `{{.TasksDir}}/DESIGN.md` with:
 
 - UI State Matrix — one row per (flow × state) combination:
 
-  | Flow           | State   | Expected Behavior                    |
-  |----------------|---------|--------------------------------------|
-  | <flow name>    | success | "<exact message or pattern>"         |
-  | <flow name>    | error   | "<exact message or pattern>" stderr  |
-  | <flow name>    | empty   | N/A — <reason> / "<message>"         |
-  | <flow name>    | loading | "<indicator description>"            |
+  | Flow        | State   | Expected Behavior                   |
+  | ----------- | ------- | ----------------------------------- |
+  | <flow name> | success | "<exact message or pattern>"        |
+  | <flow name> | error   | "<exact message or pattern>" stderr |
+  | <flow name> | empty   | N/A — <reason> / "<message>"        |
+  | <flow name> | loading | "<indicator description>"           |
 
   Auto-generate from PRD core flow and use cases. Include only states that apply.
 

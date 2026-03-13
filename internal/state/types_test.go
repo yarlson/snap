@@ -136,7 +136,7 @@ func TestState_IsValid(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "missing prd path",
+			name: "missing prd path allowed",
 			state: &State{
 				TasksDir:         "docs/tasks",
 				CurrentStep:      5,
@@ -144,7 +144,7 @@ func TestState_IsValid(t *testing.T) {
 				PRDPath:          "",
 				CompletedTaskIDs: []string{},
 			},
-			want: false,
+			want: true,
 		},
 		{
 			name: "missing tasks dir",
