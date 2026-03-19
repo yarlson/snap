@@ -46,6 +46,8 @@ That's it. `snap plan` walks you through requirements and generates task files. 
 
 `snap plan` is an interactive session where you describe what you want to build. Chat about your requirements, type `/done`, and snap generates the full planning scaffold: PRD, technology decisions, design doc, and numbered task files.
 
+If you already know the scope, say it plainly. Planning mode now treats explicit constraints and exclusions as hard boundaries, asks for clarification instead of "helpfully" expanding scope, and keeps generated task files focused on outcomes and acceptance criteria rather than over-prescribing implementation details.
+
 ```bash
 snap plan my-feature           # Chat about requirements, type /done when ready
 snap run my-feature            # Implements everything

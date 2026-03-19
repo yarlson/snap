@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -786,22 +787,22 @@ func TestGoreleaser_SnapshotBuildSucceeds(t *testing.T) {
 	// Run in a temp directory to avoid polluting the working tree with artifacts.
 	moduleRoot := mustModuleRoot(t)
 	tmpDir := t.TempDir()
+	srcRoot, err := os.OpenRoot(moduleRoot)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, srcRoot.Close()) }()
+	dstRoot, err := os.OpenRoot(tmpDir)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, dstRoot.Close()) }()
 
 	// Copy essential files to temp directory for the build.
 	for _, file := range []string{"go.mod", "go.sum", ".goreleaser.yaml", "main.go"} {
-		src := filepath.Join(moduleRoot, file)
-		dst := filepath.Join(tmpDir, file)
-		data, err := os.ReadFile(src)
-		require.NoError(t, err, "failed to read %s", file)
-		//nolint:gosec // dst is rooted under t.TempDir and file names are fixed test fixtures.
-		require.NoError(t, os.WriteFile(dst, data, 0o600), "failed to write %s", file)
+		require.NoError(t, copyFile(srcRoot, dstRoot, file), "failed to copy %s", file)
 	}
 
 	// Copy cmd and internal directories.
 	for _, dir := range []string{"cmd", "internal"} {
-		src := filepath.Join(moduleRoot, dir)
 		dst := filepath.Join(tmpDir, dir)
-		require.NoError(t, copyDir(src, dst), "failed to copy %s directory", dir)
+		require.NoError(t, copyDir(srcRoot, dir, dst), "failed to copy %s directory", dir)
 	}
 
 	ctx := context.Background()
@@ -811,32 +812,45 @@ func TestGoreleaser_SnapshotBuildSucceeds(t *testing.T) {
 	require.NoError(t, err, "goreleaser build --snapshot --clean failed: %s", out)
 }
 
-// copyDir recursively copies a directory from src to dst.
-func copyDir(src, dst string) error {
-	entries, err := os.ReadDir(src)
+func copyFile(srcRoot, dstRoot *os.Root, name string) error {
+	data, err := srcRoot.ReadFile(name)
 	if err != nil {
 		return err
 	}
+	return dstRoot.WriteFile(name, data, 0o600)
+}
+
+// copyDir recursively copies a directory from srcRoot/srcDir into dst.
+func copyDir(srcRoot *os.Root, srcDir, dst string) error {
+	subRoot, err := srcRoot.OpenRoot(srcDir)
+	if err != nil {
+		return err
+	}
+	defer subRoot.Close()
+
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
-		if entry.IsDir() {
-			if err := copyDir(srcPath, dstPath); err != nil {
-				return err
-			}
-		} else {
-			data, err := os.ReadFile(srcPath)
-			if err != nil {
-				return err
-			}
-			//nolint:gosec // dstPath is rooted under the caller-provided temp directory for trusted test fixtures.
-			if err := os.WriteFile(dstPath, data, 0o600); err != nil {
-				return err
-			}
-		}
+	dstRoot, err := os.OpenRoot(dst)
+	if err != nil {
+		return err
 	}
-	return nil
+	defer dstRoot.Close()
+
+	return fs.WalkDir(subRoot.FS(), ".", func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			if path == "." {
+				return nil
+			}
+			return dstRoot.MkdirAll(path, 0o755)
+		}
+		data, err := fs.ReadFile(subRoot.FS(), path)
+		if err != nil {
+			return err
+		}
+		return dstRoot.WriteFile(path, data, 0o600)
+	})
 }
