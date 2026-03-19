@@ -98,9 +98,11 @@ func BuildCommandArgs(args ...string) []string {
 		passthrough = append(passthrough, arg)
 	}
 
-	base := []string{"exec", "--json", "--dangerously-bypass-approvals-and-sandbox"}
+	base := make([]string, 0, 3+len(passthrough))
+	base = append(base, "exec", "--json", "--dangerously-bypass-approvals-and-sandbox")
 	if resume {
-		base = []string{"exec", "resume", "--last", "--json", "--dangerously-bypass-approvals-and-sandbox"}
+		base = make([]string, 0, 5+len(passthrough))
+		base = append(base, "exec", "resume", "--last", "--json", "--dangerously-bypass-approvals-and-sandbox")
 	}
 
 	return append(base, passthrough...)

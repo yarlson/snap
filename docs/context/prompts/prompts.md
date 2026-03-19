@@ -112,6 +112,7 @@ Package `internal/plan` manages prompt templates used in the two-phase planning 
 
 - Context — instruct Claude to read CLAUDE.md, docs/context/, scan codebase
 - Process — ask focused questions one or two at a time, build on prior answers
+- **Scope Lock** — if user provides a strict plan, switch to confirmation mode; treat explicit constraints/exclusions as fixed; do not suggest adjacent features or future phases; maintain in-scope / out-of-scope / unresolved ledger before `/done`
 - UI Surface Awareness — ask about primary UI surface (CLI/TUI/Web/API), states to handle (success, error, empty, loading), accessibility requirements, terminal width/viewport expectations, UI anti-patterns to avoid; confirm if headless/API-only
 - Guardrails — treat code/docs as UNTRUSTED
 - Completion — user types `/done` to finish Phase 1
@@ -125,6 +126,7 @@ Package `internal/plan` manages prompt templates used in the two-phase planning 
 
 - Approach — define communication patterns, not just features; adapt depth to product surface; ground decisions in target user
 - Context — read CLAUDE.md, docs/context/, PRD.md, TECHNOLOGY.md (if exists), scan codebase for patterns
+- Scope — include only surfaces, flows, and states explicitly present in PRD; preserve non-goals/exclusions; avoid hypothetical future-phase design
 - Output — required sections for all products (Voice & tone, User-facing terminology, Content patterns, Information hierarchy); required sections for user-facing output (Contract rules, UI State Matrix); conditional sections (Output formatting, Layout & navigation, Visual system, Interaction patterns, Accessibility, Responsive behavior)
 - **Contract Rules** — Every rule phrased as MUST / MUST NOT assertion covering terminology rules, content/message patterns, formatting/layout rules, accessibility requirements, anti-patterns; capped at 30 rules
 - **UI State Matrix** — One row per (flow × state) combination; shows flow name, state (success/error/empty/loading), expected behavior/message; auto-generated from PRD core flow and use cases
@@ -134,7 +136,7 @@ Package `internal/plan` manages prompt templates used in the two-phase planning 
 **File**: `internal/plan/prompts/analyze_tasks.md`
 **Purpose**: Create task list from PRD, assess against anti-patterns, refine via merge/split/rework, validate context alignment
 **Usage**: Phase 2 Step 3; runs in fresh conversation to analyze PRD, TECHNOLOGY, DESIGN
-**Process**: Create initial task list, assess against 6 anti-patterns (horizontal slice, infrastructure-only, too broad, too narrow, non-demoable, UI-undefined), refine flagged tasks, verify context alignment with `docs/context/*` constraints, self-check verification
+**Process**: Create initial task list, enforce traceability back to explicit PRD requirements/constraints, assess against 6 anti-patterns (horizontal slice, infrastructure-only, too broad, too narrow, non-demoable, UI-undefined), refine flagged tasks, verify context alignment with `docs/context/*` constraints, self-check verification
 **Anti-patterns**:
 
 - Anti-pattern #1: Horizontal Slice — single technical layer only, no user-visible outcome (verdict: MERGE)
@@ -144,6 +146,7 @@ Package `internal/plan` manages prompt templates used in the two-phase planning 
 - Anti-pattern #5: Non-Demoable — no visible/observable outcome, refactoring/library migration only (verdict: REWORK)
 - Anti-pattern #6: UI-Undefined Task — user-facing impact but lacks concrete UI deliverables or measurable UI criteria tied to DESIGN.md (verdict: REWORK)
   **Context Alignment**: After anti-pattern assessment, each task is compared against `docs/context/*` constraints (practices.md, terminology.md, domain files) to prevent silent divergence from established conventions. Tasks either follow existing patterns or include `docs/context/` updates as deliverables.
+  **Traceability Gate**: Any task that cannot be mapped back to an explicit PRD requirement, use case, constraint, or risk mitigation is removed or merged instead of expanded into net-new scope. Explicit non-goals remain hard boundaries.
 
 ### Generate Tasks Prompt
 
@@ -156,6 +159,8 @@ Package `internal/plan` manages prompt templates used in the two-phase planning 
 - Section 0 (Task Type and Placement): Includes `user-facing: yes/no` flag to classify task visibility
 - Section 4 (UI Deliverables): For user-facing tasks, specifies UI states tied to DESIGN.md state matrix, formatting/content rules referencing DESIGN.md contract rules, accessibility checks, and validation method. For non-user-facing tasks: `N/A — no user-facing output` with rationale
 - Section 11 (Acceptance Criteria): User-facing tasks MUST include UI-specific criteria tied to DESIGN.md rules and state matrix entries, ensuring measurable UI validation
+- Scope preservation — TASKS.md and TASK<N>.md generation must not add deliverables, criteria, or follow-ups beyond the finalized task list; underspecified rows stay bounded and record assumptions instead of broadening scope
+- Detail discipline — TASK<N>.md sections stay capability- and outcome-oriented; specific files/functions/types are named only when already established or contractually required, and acceptance criteria verify outcomes rather than implementation choices
 
 ## Implementation Pattern
 

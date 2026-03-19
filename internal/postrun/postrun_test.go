@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1220,11 +1221,12 @@ func TestRun_CIFix_LogsNotWrittenToDisk(t *testing.T) {
 
 	// Walk the repo directory and verify no file contains the log sentinel.
 	// CI failure logs must only be held in memory.
-	err = filepath.Walk(dir, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil || info.IsDir() {
+	rootFS := os.DirFS(dir)
+	err = fs.WalkDir(rootFS, ".", func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
 			return walkErr
 		}
-		data, readErr := os.ReadFile(path)
+		data, readErr := fs.ReadFile(rootFS, path)
 		if readErr != nil {
 			return readErr
 		}

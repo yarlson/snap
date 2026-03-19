@@ -10,6 +10,7 @@ import (
 // TestMain resets color mode so that tests expecting ANSI output get
 // predictable results regardless of terminal state (e.g. in CI).
 func TestMain(m *testing.M) {
+	_ = os.Unsetenv("NO_COLOR")
 	ui.ResetColorMode()
 	os.Exit(m.Run())
 }

@@ -793,6 +793,7 @@ func TestGoreleaser_SnapshotBuildSucceeds(t *testing.T) {
 		dst := filepath.Join(tmpDir, file)
 		data, err := os.ReadFile(src)
 		require.NoError(t, err, "failed to read %s", file)
+		//nolint:gosec // dst is rooted under t.TempDir and file names are fixed test fixtures.
 		require.NoError(t, os.WriteFile(dst, data, 0o600), "failed to write %s", file)
 	}
 
@@ -831,6 +832,7 @@ func copyDir(src, dst string) error {
 			if err != nil {
 				return err
 			}
+			//nolint:gosec // dstPath is rooted under the caller-provided temp directory for trusted test fixtures.
 			if err := os.WriteFile(dstPath, data, 0o600); err != nil {
 				return err
 			}

@@ -13,7 +13,16 @@ Use project context to ask informed, specific questions rather than generic ones
 - Ask one or two focused questions at a time
 - Cover: problem being solved, target users, scope and constraints, success criteria
 - Build on previous answers — don't repeat or ask things already answered
+- If the user already provided a strict plan, switch to confirmation mode: validate understanding, identify only missing blockers, and stop
 - When requirements are clear enough, say so — don't pad with unnecessary questions
+
+## Scope Lock
+
+- Treat explicit user constraints and exclusions as fixed unless the user changes them
+- Do NOT suggest adjacent features, future phases, stretch goals, polish work, or tooling work unless the user explicitly asks
+- If something is unclear or missing, ask a clarifying question instead of expanding scope
+- Maintain a running scope ledger in the conversation: in-scope, out-of-scope, unresolved
+- Before the user types `/done`, summarize the current in-scope, out-of-scope, and unresolved items so later planning phases inherit the correct boundaries
 
 ## UI Surface Awareness
 

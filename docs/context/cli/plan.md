@@ -71,6 +71,9 @@ The conflict guard ensures users don't accidentally overwrite planning artifacts
 
 - User chats with Claude via stdin/stdout
 - Claude asks clarifying questions about requirements
+- If the user already supplied a strict plan, Claude switches to confirmation mode and asks only for missing blockers
+- Claude maintains an explicit scope ledger (`in-scope`, `out-of-scope`, `unresolved`) before Phase 1 completes
+- Claude does not suggest adjacent features, future phases, or tooling work unless the user explicitly asks
 - User types `/done` to signal completion and move to Phase 2
 - Skipped if `--from` flag provides input file
 - Skipped if resuming prior planning session (jumps directly to Phase 2 for continuation)
@@ -139,7 +142,7 @@ Phase 2 flow:
    - Render analyze-tasks prompt template (combines create, assess, refine, validate into one prompt)
    - Prepend engineering principles preamble
    - Call LLM executor in fresh conversation (no -c flag)
-   - Reads PRD, TECHNOLOGY, DESIGN; creates task list; assesses against 6 anti-patterns (horizontal slice, infrastructure-only, too broad, too narrow, non-demoable, UI-undefined); refines flagged tasks via merge/absorb/split/rework; validates context alignment with `docs/context/*` constraints; performs self-check re-verification
+   - Reads PRD, TECHNOLOGY, DESIGN; creates task list; enforces traceability back to explicit requirements, constraints, and risk mitigations; assesses against 6 anti-patterns (horizontal slice, infrastructure-only, too broad, too narrow, non-demoable, UI-undefined); refines flagged tasks via merge/absorb/split/rework; validates context alignment with `docs/context/*` constraints; performs self-check re-verification
    - All output stays in conversation (no files written yet)
    - Display step completion
 4. **Step 4 (Sequential)**: Generate tasks
@@ -148,6 +151,8 @@ Phase 2 flow:
    - Call LLM executor with -c flag (continues analyze-tasks conversation)
    - Claude writes TASKS.md with sections A–J to tasks directory
    - Claude spawns subagents (via Agent tool) to write individual TASK<N>.md files in parallel
+   - TASKS.md and TASK<N>.md generation preserve finalized task boundaries; underspecified rows record assumptions instead of expanding scope
+   - TASK<N>.md files stay outcome-driven instead of implementation-prescriptive; exact files/functions/types are named only when established by the codebase or required by contract
    - Each subagent inherits full conversation context and writes one task file using the 15-section format
    - Display step completion
 5. Print file listing showing all generated files (PRD.md, TECHNOLOGY.md, DESIGN.md, TASKS.md, TASK0.md, TASK1.md, etc.)

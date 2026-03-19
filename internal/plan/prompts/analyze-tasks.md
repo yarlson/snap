@@ -61,6 +61,13 @@ Deviate from this order only if the docs force it — explain why explicitly, pr
 - TECHNOLOGY wins for implementation constraints and tooling
 - Call out conflicts explicitly
 
+## Traceability Gate
+
+- Every task must map back to at least one explicit PRD requirement, use case, constraint, or risk mitigation already stated in the planning docs
+- If a proposed task cannot be traced back, remove or merge it — do not create net-new scope to justify it
+- Preserve explicit PRD non-goals and exclusions as hard boundaries
+- Do NOT add future-phase tasks, speculative polish tracks, or optional platform work unless the PRD explicitly requires them
+
 ## Anti-Pattern Assessment
 
 After creating the initial task list, evaluate every task against these 6 anti-patterns. For each task, state a verdict and brief rationale.

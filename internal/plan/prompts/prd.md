@@ -27,7 +27,10 @@ The following requirements brief was provided as input for this planning session
 ## Scope
 
 - Analyze the repo and produce a single `{{.TasksDir}}/PRD.md` file
+- Only include scope explicitly requested in the brief/conversation or required by existing repository constraints
 - Make assumptions where info is missing — list them explicitly
+- Do NOT turn assumptions into requirements, future phases, or stretch goals
+- Preserve explicit exclusions and non-goals as hard boundaries
 - Do NOT write code or reference specific tech/framework names
 - Do NOT include implementation details (architecture, modules, internal APIs)
 

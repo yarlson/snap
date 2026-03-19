@@ -20,7 +20,10 @@ Translate the product requirements into a design and content specification.
 
 - Produce a single `{{.TasksDir}}/DESIGN.md` that defines the product's design language and content standards
 - Include sections **only if relevant** to the product surface (e.g., skip visual system for a headless API)
+- Design only for surfaces, flows, and states explicitly present in the PRD
 - List assumptions explicitly
+- Do NOT add surfaces, states, or interaction patterns for hypothetical features or a future phase
+- Preserve PRD non-goals and exclusions as hard boundaries
 - Do NOT write code
 
 ## Output

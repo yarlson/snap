@@ -14,6 +14,7 @@ import (
 // init() disables colors when stdout is not a TTY (e.g. CI), but unit tests
 // need ANSI codes enabled to validate token values.
 func TestMain(m *testing.M) {
+	_ = os.Unsetenv("NO_COLOR")
 	ui.ResetColorMode()
 	os.Exit(m.Run())
 }

@@ -23,6 +23,14 @@ func TestRenderRequirementsPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "headless")
 	assert.Contains(t, prompt, "accessibility")
 	assert.Contains(t, prompt, "anti-pattern")
+
+	// Scope drift prevention.
+	assert.Contains(t, prompt, "## Scope Lock")
+	assert.Contains(t, prompt, "explicit user constraints and exclusions as fixed")
+	assert.Contains(t, prompt, "Do NOT suggest adjacent features")
+	assert.Contains(t, prompt, "ask a clarifying question instead of expanding scope")
+	assert.Contains(t, prompt, "in-scope")
+	assert.Contains(t, prompt, "out-of-scope")
 }
 
 func TestRenderPRDPrompt_WithoutBrief(t *testing.T) {
@@ -33,6 +41,8 @@ func TestRenderPRDPrompt_WithoutBrief(t *testing.T) {
 	assert.NotContains(t, result, "Requirements Brief")
 	assert.Contains(t, result, "CLAUDE.md")
 	assert.Contains(t, result, "docs/context/")
+	assert.Contains(t, result, "Only include scope explicitly requested")
+	assert.Contains(t, result, "Do NOT turn assumptions into requirements")
 	assert.Contains(t, result, "Guardrails")
 	assert.Contains(t, result, "Completion")
 }
@@ -70,6 +80,8 @@ func TestRenderDesignPrompt(t *testing.T) {
 	assert.Contains(t, result, "docs/context/")
 	assert.Contains(t, result, "Guardrails")
 	assert.Contains(t, result, "Completion")
+	assert.Contains(t, result, "Do NOT add surfaces, states, or interaction patterns")
+	assert.Contains(t, result, "future phase")
 
 	// Contract Rules (M2).
 	assert.Contains(t, result, "Contract")
@@ -130,6 +142,10 @@ func TestRenderAnalyzeTasksPrompt(t *testing.T) {
 	assert.Contains(t, result, "docs/context/*")
 	assert.Contains(t, result, "Aligned")
 	assert.Contains(t, result, "Conflicting")
+	assert.Contains(t, result, "## Traceability Gate")
+	assert.Contains(t, result, "Every task must map back to")
+	assert.Contains(t, result, "remove or merge it")
+	assert.Contains(t, result, "Preserve explicit PRD non-goals")
 
 	// Refinement from merge-tasks.
 	assert.Contains(t, result, "Re-verify")
@@ -179,6 +195,12 @@ func TestRenderGenerateTasksPrompt(t *testing.T) {
 
 	// Guardrails.
 	assert.Contains(t, result, "Guardrails")
+	assert.Contains(t, result, "Do NOT add deliverables")
+	assert.Contains(t, result, "preserve the task's original boundaries")
+	assert.Contains(t, result, "If the row is underspecified")
+	assert.Contains(t, result, "Prefer behavioral expectations over prescribing internal implementation details")
+	assert.Contains(t, result, "Name specific files, functions, or types only when")
+	assert.Contains(t, result, "Acceptance criteria must verify outcomes, not internal implementation choices")
 
 	// Preamble (via prependPreamble).
 	assert.Contains(t, result, "simplest solution")
